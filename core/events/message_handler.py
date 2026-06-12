@@ -1,6 +1,7 @@
 import asyncio
 import math
 import json
+import re
 import discord
 from pathlib import Path
 from datetime import datetime, timezone
@@ -18,11 +19,13 @@ logger = setup_logging()
 WIB = ZoneInfo("Asia/Jakarta")
 
 class MessageHandler:
-    def __init__(self, bot, ai_service, cooldown_manager, micro_rag):
+    def __init__(self, bot, ai_service, cooldown_manager, micro_rag,
+                 web_rate_limiter=None):
         self.bot = bot
         self.ai = ai_service
         self.cooldown = cooldown_manager
         self.micro_rag = micro_rag  # Micro-RAG untuk profiling user
+        self.web_rate_limiter = web_rate_limiter  # Web scraping rate limiter
 
     def clean_message(self, content):
         """Bersihkan pesan dari mention bot."""
@@ -212,8 +215,10 @@ class MessageHandler:
                     timestamp=message.created_at,
                 )
 
-            # STEP 4: Check if bot should reply (mention atau reply)
+            # STEP 4: Check if bot should reply (mention, reply, atau URL)
             should_reply = False
+            has_url = bool(re.search(r'https?://[^\s<>"\']+', cleaned))
+            
             if self.bot.user.mentioned_in(message):
                 should_reply = True
             if message.reference:
@@ -226,6 +231,21 @@ class MessageHandler:
 
             if not should_reply:
                 return
+
+            # STEP 4.5: Cek rate limit web scraper (1x per-user per minggu)
+            if has_url and self.web_rate_limiter is not None:
+                if module_manager.is_enabled("web_search"):
+                    if not self.web_rate_limiter.can_scrape(user_id):
+                        sisa_hari = self.web_rate_limiter.get_remaining_days(user_id)
+                        msg = await message.reply(
+                            f"⚠️ Maaf {user_name}, fitur web search cuma bisa 1x seminggu per orang. "
+                            f"Kamu bisa pakai lagi dalam {sisa_hari} hari. "
+                            f"Minta tolong teman yang lain untuk bantu cek link-nya ya! 🙏"
+                        )
+                        # Tetap lanjut ke Gemini — Gemini bisa jawab tanpa scrap
+                        # Tandai bahwa web sudah dicegah (tidak di-mark scraped)
+                        self.cooldown.mark_replied(channel_id)
+                        return
 
             # STEP 5: Check cooldown (hanya cek, tanpa update state)
             can_proceed, wait_time = await self.cooldown.check(channel_id)
@@ -275,6 +295,14 @@ class MessageHandler:
                 # Generate reply dari Gemini
                 reply = await self.ai.generate_reply(history, user_context=user_context)
 
+                # STEP 6.5: Catat web scraping sukses (setelah Gemini reply)
+                if has_url and self.web_rate_limiter is not None:
+                    if module_manager.is_enabled("web_search"):
+                        from ai.web_scraper import BrowserlessClient
+                        scraper = BrowserlessClient()
+                        if scraper.enabled and self.web_rate_limiter.can_scrape(user_id):
+                            self.web_rate_limiter.mark_scraped(user_id)
+                
                 # Add sentiment & wellness
                 # sentiment = analyze_sentiment(cleaned)
                 # mood_emoji = get_mood_emoji(sentiment)
@@ -294,7 +322,7 @@ class MessageHandler:
                 # Send response ke user (no mention)
                 await self._send_long_message(message.channel, reply, reply_to=message)
             
-            # STEP 6.5: Tandai cooldown SETELAH reply sukses dikirim
+            # STEP 6.7: Tandai cooldown SETELAH reply sukses dikirim
             self.cooldown.mark_replied(channel_id)
             
             # STEP 7: Save to history.json (PERBAIKAN: format yang benar)

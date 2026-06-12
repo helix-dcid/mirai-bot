@@ -27,6 +27,8 @@ from dotenv import load_dotenv
 from typing import List, Dict, Optional, Tuple
 from ai.time import get_wib_time, get_wib_time_str
 from ai.cuaca import BMKGClient
+from ai.web_scraper import BrowserlessClient
+from ai.youtube_transcript import YouTubeTranscriptClient
 from config import (
     GEMINI_MODEL,
     GEMINI_API_VERSION,
@@ -142,6 +144,8 @@ class GeminiClient:
         self.api_key = self.api_keys[0]
         self.endpoint = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
         self.bmkg = BMKGClient()
+        self.web_scraper = BrowserlessClient()
+        self.youtube_transcript = YouTubeTranscriptClient()
         self.system_prompt = SYSTEM_PROMPT
         self.news_summary = NEWS_SUMMARY
         self._cache = {}
@@ -239,19 +243,145 @@ class GeminiClient:
         return TEMPERATURE
 
     # ------------------------------------------------------------------
+    # Webpage context (Browserless)
+    # ------------------------------------------------------------------
+    async def _get_webpage_context(self, user_message: str) -> str:
+        """
+        Deteksi URL dalam pesan user, scrap via Browserless, return konteks.
+        Mirip pola _get_weather_context().
+        """
+        if not self.web_scraper.enabled:
+            return ""
+
+        # Ekstrak URL dari pesan
+        urls = self.web_scraper.extract_urls(user_message)
+        if not urls:
+            return ""
+
+        # Ambil URL pertama saja (untuk sekarang)
+        url = urls[0]
+
+        try:
+            content = await self.web_scraper.scrape_url(url)
+            if not content:
+                return ""
+
+            ctx = (
+                f"\n\n[KONTEN WEBSITE: {url}]\n"
+                f"{content}\n"
+                "\n⚠️ INSTRUKSI: Konten di atas adalah data REAL dari website yang user kirim. "
+                "Gunakan data ini untuk menjawab pertanyaan user tentang website tersebut. "
+                "Jangan bilang kamu tidak punya akses ke website — karena data sudah tersedia di atas. "
+                "Jawab dengan gaya ramah Mirai dan berikan ringkasan informatif."
+            )
+            return ctx
+        except Exception as e:
+            logger.warning(f"[Gemini] Failed to get webpage context: {e}")
+            return ""
+
+    # ------------------------------------------------------------------
+    # YouTube Transcript context
+    # ------------------------------------------------------------------
+    async def _get_youtube_transcript_context(self, user_message: str) -> str:
+        """
+        Deteksi URL YouTube dalam pesan user, ekstrak transkrip via yt-dlp,
+        return konteks untuk AI. Mirip pola _get_webpage_context().
+        
+        Hanya inject transkrip jika:
+          1. Module youtube_transcript aktif
+          2. Pesan mengandung kata tanya tentang video (keyword detection)
+          3. Atau pesan hanya berisi URL (user minta tolong baca video)
+        """
+        if not self.youtube_transcript.enabled:
+            return ""
+        
+        # Cek module manager
+        from core.module_manager import module_manager
+        if not module_manager.is_enabled("youtube_transcript"):
+            return ""
+        
+        # Ekstrak URL YouTube dari pesan
+        urls = self.youtube_transcript.extract_urls(user_message)
+        if not urls:
+            return ""
+        
+        # Keyword detection: hanya inject jika user bertanya tentang video
+        # Cegah token waste untuk casual share link
+        msg_lower = user_message.lower()
+        video_keywords = [
+            "apa", "tentang", "isi", "kata", "bicarakan", "jelaskan",
+            "ringkas", "transkrip", "subtitle", "teks", "terjemahkan",
+            "video ini", "lihat", "tonton", "perhatikan", "cek",
+            "analisa", "analisis", "review", "ulas", "bahas",
+        ]
+        has_question = any(kw in msg_lower for kw in video_keywords)
+        # Juga inject jika ada kata perintah: "ringkas video ini", "apa isi video"
+        # Atau jika pesan hanya URL (tidak ada teks lain) — user minta baca
+        only_url = len(urls) == 1 and msg_lower.strip() == urls[0].lower().strip()
+        
+        if not has_question and not only_url:
+            logger.debug(f"[Gemini] YouTube URL ditemukan tapi tidak ada kata kunci, skip transkrip")
+            return ""
+        
+        # Ambil URL pertama saja
+        url = urls[0]
+        
+        try:
+            result = await self.youtube_transcript.get_transcript(url)
+            if not result:
+                return ""
+            
+            video_id = result["video_id"]
+            title = result["title"]
+            transcript = result.get("transcript")
+            
+            if transcript:
+                ctx = (
+                    f"\n\n[TRANSKRIP YOUTUBE: {title}]\n"
+                    f"URL: {result['url']}\n\n"
+                    f"{transcript}\n\n"
+                    "⚠️ INSTRUKSI: Teks di atas adalah transkrip REAL dari video YouTube "
+                    "yang user bagikan. Gunakan informasi ini untuk menjawab pertanyaan user "
+                    "tentang isi video tersebut. Jangan bilang kamu tidak bisa melihat atau "
+                    "mengakses video — karena transkrip sudah tersedia di atas. "
+                    "Jawab dengan gaya ramah Mirai dan berikan ringkasan informatif "
+                    "tentang isi video."
+                )
+                return ctx
+            else:
+                # Video ditemukan tapi tidak ada subtitle
+                ctx = (
+                    f"\n\n[VIDEO YOUTUBE: {title}]\n"
+                    f"URL: {result['url']}\n\n"
+                    "⚠️ INFORMASI: Video ini tidak memiliki subtitle/transkrip yang bisa "
+                    "diekstrak. Beri tahu user bahwa video tersebut tidak memiliki teks "
+                    "tertutup (closed captions) sehingga kamu tidak bisa membaca isinya. "
+                    "Namun kamu tetap bisa memberikan informasi umum tentang video tersebut "
+                    "berdasarkan judulnya."
+                )
+                return ctx
+        except Exception as e:
+            logger.warning(f"[Gemini] Failed to get YouTube transcript: {e}")
+            return ""
+
+    # ------------------------------------------------------------------
     # Weather context
     # ------------------------------------------------------------------
     async def _get_weather_context(self, user_message: str) -> str:
         """Get weather context if user asks about weather."""
         # Trigger cuaca bila pesan mengandung kata kunci cuaca atau deskripsi cuaca umum
-        triggers = ["cuaca", "hujan", "panas", "mendung", "cerah"]
+        triggers = [
+            "cuaca", "hujan", "panas", "mendung", "cerah", "suhu",
+            "dingin", "angin", "berawan", "lembab", "kota", "bmkg",
+        ]
         if not any(kw in user_message.lower() for kw in triggers):
             return ""
         
         try:
             loc = self.bmkg.extract_location_from_text(user_message)
             if not loc:
-                return ""
+                # Jika ada trigger cuaca tapi lokasi tidak disebut, gunakan default (Jakarta)
+                loc = "Jakarta"
             
             code = await self.bmkg.search_location_code(loc)
             if not code:
@@ -262,7 +392,7 @@ class GeminiClient:
                 return ""
             
             weather_ctx = (
-                f"\n\n[DATA CUACA BMKG UNTUK {loc.upper()}]\n"
+                f"\n\n[DATA CUACA BMKG REAL-TIME UNTUK {loc.upper()}]\n"
                 f"Lokasi: {data['lokasi']['desa']}, {data['lokasi']['kecamatan']}, {data['lokasi']['kotkab']}\n"
                 "Prakiraan terdekat:\n"
             )
@@ -272,8 +402,10 @@ class GeminiClient:
                     f"Suhu {f['t']}°C, Kelembapan {f['hu']}%\n"
                 )
             weather_ctx += (
-                "\nBerikan data di atas dengan gaya ramah Mirai, "
-                "sertakan saran kesehatan bila relevan."
+                "\n⚠️ INSTRUKSI PENTING: Data cuaca di atas adalah data REAL-TIME dari BMKG."
+                "\nGunakan data ini untuk menjawab pertanyaan user. Jangan bilang kamu tidak punya akses "
+                "atau tidak bisa mengecek cuaca — karena data sudah tersedia di atas. "
+                "Jawab dengan gaya ramah Mirai dan sertakan saran kesehatan bila relevan."
             )
             return weather_ctx
         except Exception as e:
@@ -290,17 +422,23 @@ class GeminiClient:
         user_context: str
     ) -> Dict:
         """Build API request payload."""
-        # Get weather context if needed
+        # Get weather, webpage & youtube context if needed
         weather_ctx = ""
+        webpage_ctx = ""
+        youtube_ctx = ""
         if history and history[-1].get("role") == "user":
             last_msg = self._extract_text_from_message(history[-1])
             weather_ctx = await self._get_weather_context(last_msg)
+            webpage_ctx = await self._get_webpage_context(last_msg)
+            youtube_ctx = await self._get_youtube_transcript_context(last_msg)
         
         # Build full system instruction
         full_system = (
             self.system_prompt +
             f"\n\nInformasi waktu saat ini: {get_wib_time_str()}\n" +
             weather_ctx +
+            webpage_ctx +
+            youtube_ctx +
             self.news_summary +
             user_context
         )

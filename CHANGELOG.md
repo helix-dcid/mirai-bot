@@ -1,5 +1,71 @@
 # Changelog - Mirai Helix
 
+## [3.4.0] - 2026-06-12
+### ✨ Added
+- **YouTube Transcript via yt-dlp**: Fitur ekstrak subtitle/closed captions dari video YouTube.
+  - `ai/youtube_transcript.py` — Client async yt-dlp untuk download subtitle tanpa download video.
+  - Satu panggilan yt-dlp (`--print title` + `--write-auto-subs`) untuk ambil judul & subtitle sekaligus.
+  - Parse SRT/VTT ke teks bersih (stdlib, tanpa dependency baru).
+  - Cache per video ID (TTL 1 jam, in-memory).
+  - SSRF protection (reuse dari `web_scraper.py`).
+  - Keyword detection: hanya inject transkrip jika user bertanya tentang video (cegah token waste).
+  - Module `youtube_transcript` (default aktif) via Module Manager.
+  - Integrasi otomatis ke konteks Gemini (mirip pola cuaca & web scraper).
+- **`config.py`** — Konfigurasi baru: `YOUTUBE_TRANSCRIPT_CACHE_TTL`, `YOUTUBE_TRANSCRIPT_MAX_CHARS`, `YOUTUBE_TRANSCRIPT_SUB_LANGS`.
+- **`requirements.txt`** — Dependency baru: `yt-dlp>=2024.12.0`.
+
+### 🧹 Cleanup
+- **`ai/youtube_transcript.py`**: Hapus dead code (`_get_video_title`, `import json`, `import shutil`, `import os`, `parse_qs`).
+
+### 🐛 Fixed
+- **`ai/youtube_transcript.py` — Timeout & fallback**: Tambah `--socket-timeout 15` ke argumen yt-dlp untuk cegah hanging. Fallback subtitle sekarang berjalan meskipun panggilan pertama gagal (retcode != 0). Tambah stderr logging untuk debugging.
+- **`core/events/message_handler.py` — Cleanup**: Hapus import `module_manager` redundant di step 4.5 & 6.5 (sudah di-import di level module).
+
+## [3.3.0] - 2026-06-12
+### 🐛 Fixed
+- **`main.py` & `config.py` — Timing `load_dotenv()`**: env vars (`NVIDIA_API_KEY`, `BROWSERLESS_API_KEY`) dibaca sebelum `.env` diload karena `load_dotenv()` dipanggil setelah import project modules. Sekarang dipanggil sebelum import apapun.
+- **`core/router.py` — Guild-specific sync dinonaktifkan**: `GUILD_ID` tidak lagi digunakan untuk `copy_global_to` + `sync(guild=guild)` yang menyebabkan double slash command. Kini hanya global sync.
+- **`ai/web_scraper.py` — Browserless HTTP 400**: Payload `rejectResourceTypes` dan `waitFor` tidak dikenali oleh skema endpoint `/content`. Disederhanakan menjadi hanya `{"url": url}`.
+
+## [3.2.0] - 2026-06-11
+### ✨ Added
+- **Web Search via Browserless**: Fitur auto-search website jika user mengirim link dengan mention.
+  - `ai/web_scraper.py` — Client Browserless REST API + HTML cleaner (stdlib) + cache per URL (5 menit).
+  - `utils/web_rate_limiter.py` — Rate limiter per-user (1x/minggu) dengan persistent JSON (atomic write).
+  - Deteksi URL otomatis + inject konten web ke konteks Gemini (mirip pola cuaca).
+  - SSRF protection (blokir localhost/private IP).
+  - Module `web_search` (default aktif) via Module Manager.
+  - Env baru: `BROWSERLESS_API_KEY`, `BROWSERLESS_BASE_URL`.
+
+### 🐛 Fixed
+- **`ai/cuaca.py — search_location_code()`**: Perbaikan besar pencarian kota.
+  - `_CITY_FALLBACK` diperluas dari 16 → 50+ kota besar + alias (Solo→Surakarta, Jogja→Yogyakarta, Lampung→Bandar Lampung).
+  - Pencocokan fallback diperbaiki: dari substring `city in q_upper` → exact/word-boundary (cegah false match).
+  - `_search_db` tidak lagi mengembalikan kode non-adm4 (1 titik) ke BMKG API — dipastikan selalu resolve ke kode desa (3 titik).
+  - Province fallback: jika kota tidak memiliki child desa, cari desa lain di provinsi yang sama.
+
+### 🧹 Cleanup
+- **Hapus 5 file dead code**: `core/llm_handler.py`, `core/deepseek_batch.py`, `ai/qwen_client.py`, `utils/rag_utils.py`, `utils/helper.py`.
+  - Tidak ada import yang merujuk ke file-file ini — aman dihapus.
+  - `deepseek_batch.py` memiliki syntax error (koma hilang) — tidak pernah berfungsi.
+
+## [3.1.0] - 2026-05-02
+### ✨ Added
+- **`.env.example`**: File template konfigurasi environment dengan dokumentasi lengkap untuk semua variabel yang dibutuhkan.
+
+### ⚡ Improved
+- **`ai/cuaca.py`**: Auto-download database wilayah dari GitHub (cahyadsn/wilayah), parse SQL dump, dan simpan ke SQLite via `aiosqlite` (async, non-blocking).
+  - Download otomatis `wilayah.sql` (2.9 MB) saat pertama kali dibutuhkan.
+  - Import 91.162 baris data wilayah ke `data/wilayah.db`.
+  - File SQL otomatis dihapus setelah import berhasil (hemat disk).
+  - Pencarian lokasi menggunakan `aiosqlite` dengan prioritas: Kota → Kabupaten → Kecamatan → Desa.
+  - Lazy initialization: DB hanya di-download saat pertama kali cuaca diminta.
+- **`README.md`**: Ditambahkan informasi tentang `.env.example` dan database wilayah otomatis.
+- **`ai/cuaca.py -- BMKGClient.search_location_code()`**: Strategi pencarian ditingkatkan — "Bandung" sekarang mengarah ke **Kota Bandung** (32.73), bukan desa Bandung di Tulungagung.
+
+### 🧹 Cleanup
+- File SQL sementara (`wilayah.sql`) otomatis dihapus setelah di-import ke DB.
+
 ## [3.0.0] - 2026-05-01
 ### ✨ Added
 - **Model DeepSeek V4 Flash**: Dukungan model `deepseek-ai/deepseek-v4-flash` sebagai alternatif lebih ringan & cepat dari `deepseek-v4-pro`.

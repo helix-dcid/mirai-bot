@@ -1,10 +1,13 @@
 import os
 from dotenv import load_dotenv
+
+# Load .env FIRST before importing project modules that read env vars
+load_dotenv()
+
 from core.bot import create_bot
 from core.router import Router
 from utils.logger import setup_logging
 
-load_dotenv()
 logger = setup_logging()
 
 def main():

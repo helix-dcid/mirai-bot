@@ -1,5 +1,4 @@
 {
-  "model": "deepseek-ai/deepseek-v4-pro",
   "enabled": true,
   "enabled_channels": [],
   "forced_delivery_channel_id": null,

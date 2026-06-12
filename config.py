@@ -1,4 +1,9 @@
 import os
+from dotenv import load_dotenv
+
+# Load .env first so all os.getenv() calls below find environment variables
+load_dotenv()
+
 # config.py - Konfigurasi default untuk Mirai Bot
 
 # ===== MEMORY CONFIG =====
@@ -47,3 +52,17 @@ NEWS_SUMMARY_PATH = "data/summary.json"
 NEWS_REFRESH_SECONDS = 3600  # Refresh berita dan summary setiap 1 jam
 NEWS_MAX_ITEMS = 30  # Batasi jumlah berita yang dirangkum
 NEWS_MAX_CHARS = 12000  # Batasi total karakter berita yang dikirim ke AI
+
+# ===== WEB SCRAPER (BROWSERLESS) CONFIG =====
+BROWSERLESS_API_KEY = os.getenv('BROWSERLESS_API_KEY', '')
+BROWSERLESS_BASE_URL = os.getenv('BROWSERLESS_BASE_URL', 'https://chrome.browserless.io')
+BROWSERLESS_TIMEOUT = 15  # Timeout per request (detik)
+BROWSERLESS_MAX_CHARS = 8000  # Maks karakter konten web yang diekstrak
+BROWSERLESS_CACHE_TTL = 300  # Cache scrap per URL, 5 menit
+
+# ===== YOUTUBE TRANSCRIPT CONFIG =====
+YOUTUBE_TRANSCRIPT_CACHE_TTL = 3600  # Cache transcript per video ID, 1 jam
+YOUTUBE_TRANSCRIPT_MAX_CHARS = 10000  # Maks karakter transkrip yang diekstrak
+YOUTUBE_TRANSCRIPT_SUB_LANGS = ["id", "en"]  # Prioritas bahasa subtitle
+# ===== WEB SEARCH RATE LIMITER CONFIG =====
+WEB_SEARCH_COOLDOWN_DAYS = 7  # 1x scrap per user per N hari

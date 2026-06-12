@@ -9,8 +9,6 @@ Setiap command group ada di file terpisah:
   - commands/qwen_command.py          → /qwen (add, remove, status, toggle, run, ...)
   - commands/module_command.py        → /module
   - commands/greeting_command.py      → /greeting
-  - commands/bedtime_command.py       → /bedtime
-  - commands/online_counter_command.py → /online_counter
   - commands/general.py               → /report
 """
 
@@ -54,25 +52,6 @@ class CommandGroup:
 
         from commands.greeting_command import GreetingCommands
         GreetingCommands(self.bot).register(self.tree)
-
-        from commands.bedtime_command import BedtimeCommands, set_reminder_manager
-        # reminder_manager akan di-set dari luar
-        self._bedtime_set_rm = set_reminder_manager
-        BedtimeCommands(self.bot).register(self.tree)
-
-        from commands.online_counter_command import OnlineCounterCommands, set_online_counter_manager
-        self._oc_set_ocm = set_online_counter_manager
-        OnlineCounterCommands(self.bot).register(self.tree)
-
-    def set_reminder_manager(self, manager):
-        """Set reminder manager untuk /bedtime commands."""
-        if hasattr(self, "_bedtime_set_rm"):
-            self._bedtime_set_rm(manager)
-
-    def set_online_counter_manager(self, manager):
-        """Set online counter manager untuk /online_counter commands."""
-        if hasattr(self, "_oc_set_ocm"):
-            self._oc_set_ocm(manager)
 
     async def sync_commands(self, guild_id: Optional[int] = None):
         """Sinkronisasi commands ke Discord."""

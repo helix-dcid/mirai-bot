@@ -17,11 +17,9 @@ logger = setup_logging()
 WIB = ZoneInfo("Asia/Jakarta")
 
 class SchedulerService:
-    def __init__(self, bot, micro_rag, reminder_manager, online_counter_manager):
+    def __init__(self, bot, micro_rag):
         self.bot = bot
         self.micro_rag = micro_rag
-        self.reminder_manager = reminder_manager
-        self.online_counter_manager = online_counter_manager
         self.modules_paused = False  # Track apakah modul sedang dipause
         self.prev_module_status = {}
         self.rpc_statuses = [
@@ -49,8 +47,6 @@ class SchedulerService:
         asyncio.create_task(self.update_presence())
         asyncio.create_task(self.schedule_news_summary())
         asyncio.create_task(self.schedule_micro_rag())
-        asyncio.create_task(self.reminder_manager.initialize_all_reminders())
-        asyncio.create_task(self.online_counter_manager.initialize_all_counters())
         asyncio.create_task(self.monitor_resources())
         asyncio.create_task(self._start_qwen_batch())
         logger.info("[Scheduler] All background tasks started.")

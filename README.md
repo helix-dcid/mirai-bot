@@ -1,5 +1,8 @@
 # Mirai Helix 🤖✨
 
+![Discord](https://img.shields.io/badge/h.e.l.i.x-server-brightgreen?style=for-the-badge&logo=discord&logoColor=white)
+[![Discord](https://img.shields.io/discord/1388310480803598458?style=for-the-badge&logo=discord&label=HEALTH)](https://discord.gg/h7EUsuDjg5)
+
 Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash) untuk analisis percakapan mendalam, pembuatan laporan otomatis, dan memori jangka panjang (Micro-RAG).
 
 ## ✨ Fitur Utama
@@ -11,8 +14,11 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **📍 Channel Hasil Terpusat**: Tentukan channel khusus untuk laporan agar chat tidak berantakan.
 - **📂 Attachment Processing**: Membaca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
 - **🔄 Multi-Provider AI**: Gemini, Groq, DeepSeek V4 Pro, DeepSeek V4 Flash dengan mekanisme fallback.
+- **📍 Database Wilayah Offline**: Bot otomatis mendownload & meng-import database wilayah Kemendagri (~91rb lokasi) ke SQLite saat pertama kali `/cuaca` digunakan. File SQL dihapus setelah import untuk hemat disk.
 - **⚡ Module Manager**: Kontrol modul aktif/nonaktif dinamis tanpa restart.
-- **🌤️ Integrasi BMKG**: Data cuaca real-time dari BMKG.
+- **🌤️ Integrasi BMKG**: Data cuaca real-time dari BMKG dengan database wilayah offline (91.162 lokasi) via `aiosqlite` — download otomatis saat pertama digunakan.
+- **🌐 Web Search via Browserless**: Deteksi URL otomatis di chat, scrap konten web via Browserless REST API, cache per URL (5 menit), SSRF protection, dan rate limiter per-user (1x/minggu).
+- **🎬 YouTube Transcript via yt-dlp**: Deteksi URL YouTube otomatis, ekstrak subtitle/closed captions via yt-dlp tanpa download video. Parse SRT/VTT ke teks bersih, cache per video ID (1 jam), SSRF protection, keyword detection (hanya inject transkrip jika user bertanya tentang video). Module `youtube_transcript` (default aktif).
 - **💻 Slash Commands Lengkap**: Modular, terorganisir per fitur.
 
 ## 🧠 DeepSeek Model Selection
@@ -29,12 +35,14 @@ Gunakan perintah `/deepseek model` untuk melihat dan mengganti model aktif.
 ## 🛠️ Teknologi
 
 - **Bahasa**: Python 3.11+
-- **Core**: `discord.py`, `aiohttp`
+- **Core**: `discord.py`, `aiohttp`, `aiosqlite`
 - **AI & LLM**:
   - Google Gemini API (Gemini 2.5 Flash)
   - Groq API (Llama 3.1)
   - NVIDIA NIM API (DeepSeek V4 Pro / V4 Flash)
 - **File Parsing**: `pdfplumber`, `python-docx`, `openpyxl`, `python-pptx`
+- **Web Scraping**: Browserless REST API (opsional)
+- **YouTube Transcript**: yt-dlp (subtitle extraction, lokal, gratis)
 - **Data Persistence**: `json` dengan **Atomic Write** & **Thread Locking**
 
 ## 📋 Prasyarat
@@ -64,13 +72,20 @@ pip install -r requirements.txt
 ```
 
 ### 4. Konfigurasi Environment
-Buat file `.env`:
+```bash
+cp .env.example .env
+```
+Lalu isi `.env` dengan token dan API key yang sesuai:
 ```env
 DISCORD_TOKEN=your_discord_bot_token
-GEMINI_KEYS=your_gemini_key_1,your_gemini_key_2
+GUILD_ID=your_discord_guild_id
+NVIDIA_API_KEY=your_nvidia_api_key_here
 GROQ_API_KEY=your_groq_key
-NVIDIA_API_KEY=your_nvidia_key_here
+GEMINI_KEYS=your_gemini_key_1,your_gemini_key_2
+BROWSERLESS_API_KEY=your_browserless_api_key  # opsional, untuk web search
 ```
+
+> Lihat [.env.example](.env.example) untuk daftar lengkap variabel yang tersedia.
 
 ### 5. Jalankan Bot
 ```bash
@@ -115,7 +130,7 @@ python main.py
 | Command | Deskripsi |
 |---------|-----------|
 | `/module status` | Status semua modul |
-| `/module toggle` | Aktifkan/nonaktifkan modul |
+| `/module toggle` | Aktifkan/nonaktifkan modul (Calculator, Weather, News, Greeting, Wellness, dll) |
 | `/greeting status` | Status welcome/goodbye |
 | `/greeting toggle` | Aktifkan/nonaktifkan greeting |
 | `/greeting setchannel` | Set channel greeting |
@@ -129,7 +144,9 @@ mirai-helix/
 ├── ai/
 │   ├── deepseek_client.py   # Client DeepSeek V4 Pro/Flash (NVIDIA NIM)
 │   ├── gemini.py            # Client Google Gemini
-│   ├── groq_client.py       # Client Groq
+│   ├── web_scraper.py       # Client Browserless REST API
+│   ├── youtube_transcript.py# Client yt-dlp YouTube transcript
+│   ├── cuaca.py             # Client BMKG cuaca
 │   └── prompts/             # System prompt Mirai
 ├── commands/                # Slash commands (modular)
 │   ├── info_command.py      # /ask, /ping, /info, /clear, /status, /cuaca
@@ -138,8 +155,6 @@ mirai-helix/
 │   ├── qwen_command.py      # /qwen (backward compat batch)
 │   ├── module_command.py    # /module
 │   ├── greeting_command.py  # /greeting
-│   ├── bedtime_command.py   # /bedtime
-│   ├── online_counter_command.py # /online_counter
 │   └── general.py           # /report
 ├── core/
 │   ├── command.py           # Loader commands (memanggil semua file di commands/)
@@ -152,9 +167,15 @@ mirai-helix/
 │   ├── user_profiles.json   # Profil user (Micro-RAG)
 │   └── module_config.json   # Status aktif/nonaktif modul
 ├── utils/
-│   ├── rag_utils.py         # Manajemen profil & TTL
+│   ├── web_rate_limiter.py  # Rate limiter per-user untuk web search
+│   ├── sentiment.py         # Analisis sentimen
+│   ├── calculator.py        # Kalkulator kesehatan
+│   ├── cleanup.py           # Pembersihan data
+│   ├── wellness.py          # Utilitas kesehatan
+│   ├── identity.py          # Resolusi identitas user
 │   └── logger.py            # Setup logging
 ├── .env                     # Konfigurasi sensitif (JANGAN di-commit)
+├── .env.example             # Template konfigurasi environment
 ├── requirements.txt         # Dependencies
 ├── main.py                  # Entry point
 ├── README.md

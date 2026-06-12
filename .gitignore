@@ -11,7 +11,10 @@ core/history.json
 core/monitor.py
 data/online_counters.json
 data/qwen_user/
+data/deepseek_user/
 data/reminders.json
+data/wilayah.db
+data/wilayah.sql
 
 # File sementara / log
 fix-planning/
@@ -20,3 +23,6 @@ history.json
 plainning.md
 planning.md
 script.zip
+server.log
+mirai-helix.tar.gz
+data/chat_log.json
