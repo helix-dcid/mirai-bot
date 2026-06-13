@@ -1,5 +1,22 @@
 # Changelog - Mirai Helix
 
+## [3.5.0] - 2026-06-13
+### ✨ Added
+- **Web Search via Tavily + DuckDuckGo**: Pencarian web aktif untuk pertanyaan user tentang informasi terkini.
+  - `ai/web_search.py` — `WebSearchClient` async: Tavily Search API (primary) + DuckDuckGo via `duckduckgo-search` (fallback).
+  - Tavily: REST POST ke `api.tavily.com/search`, hasil AI-optimized, `include_answer` untuk ringkasan singkat.
+  - DuckDuckGo fallback: otomatis aktif jika Tavily tidak tersedia/gagal, tanpa API key.
+  - Cache per query (TTL 5 menit, in-memory, thread-safe via `asyncio.Lock`).
+  - Result clipping ke 8000 karakter total untuk cegah token explosion.
+  - Auto-detect pertanyaan faktual via keyword detection ("cari", "search", "siapa", "apa itu", "kapan", dll).
+  - Module `search` (default aktif) via Module Manager — toggle terpisah dari `web_search` (Browserless scraping).
+  - Integrasi otomatis ke konteks Gemini (`_get_search_context()` di `ai/gemini.py`).
+- **Slash Commands**: `/search` (hasil mentah dengan embed) dan `/search-ai` (hasil search dijelaskan oleh Mirai).
+  - `commands/search_command.py` — dua command baru terdaftar via `core/command.py`.
+- **`config.py`** — Konfigurasi baru: `TAVILY_API_KEY`, `TAVILY_BASE_URL`, `TAVILY_TIMEOUT`, `TAVILY_MAX_RESULTS`, `TAVILY_MAX_CHARS`, `TAVILY_CACHE_TTL`, `TAVILY_SEARCH_DEPTH`.
+- **`.env.example`** — Section baru `TAVILY_API_KEY` dengan dokumentasi.
+- **`requirements.txt`** — Dependency baru: `duckduckgo-search>=7.0.0`.
+
 ## [3.4.0] - 2026-06-12
 ### ✨ Added
 - **YouTube Transcript via yt-dlp**: Fitur ekstrak subtitle/closed captions dari video YouTube.

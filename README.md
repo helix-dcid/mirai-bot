@@ -19,6 +19,7 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **🌤️ Integrasi BMKG**: Data cuaca real-time dari BMKG dengan database wilayah offline (91.162 lokasi) via `aiosqlite` — download otomatis saat pertama digunakan.
 - **🌐 Web Search via Browserless**: Deteksi URL otomatis di chat, scrap konten web via Browserless REST API, cache per URL (5 menit), SSRF protection, dan rate limiter per-user (1x/minggu).
 - **🎬 YouTube Transcript via yt-dlp**: Deteksi URL YouTube otomatis, ekstrak subtitle/closed captions via yt-dlp tanpa download video. Parse SRT/VTT ke teks bersih, cache per video ID (1 jam), SSRF protection, keyword detection (hanya inject transkrip jika user bertanya tentang video). Module `youtube_transcript` (default aktif).
+- **🔍 Web Search via Tavily**: Pencarian web aktif saat user bertanya tentang informasi terkini. Primary: Tavily Search API (AI-optimized results, include_answer). Fallback: DuckDuckGo (gratis, tanpa API key). Auto-detect pertanyaan faktual via keyword detection, cache per query (5 menit), result clipping (8000 chars). Module `search` (default aktif, toggle terpisah dari Browserless scraping).
 - **💻 Slash Commands Lengkap**: Modular, terorganisir per fitur.
 
 ## 🧠 DeepSeek Model Selection
@@ -42,6 +43,7 @@ Gunakan perintah `/deepseek model` untuk melihat dan mengganti model aktif.
   - NVIDIA NIM API (DeepSeek V4 Pro / V4 Flash)
 - **File Parsing**: `pdfplumber`, `python-docx`, `openpyxl`, `python-pptx`
 - **Web Scraping**: Browserless REST API (opsional)
+- **Web Search**: Tavily Search API + DuckDuckGo fallback (opsional)
 - **YouTube Transcript**: yt-dlp (subtitle extraction, lokal, gratis)
 - **Data Persistence**: `json` dengan **Atomic Write** & **Thread Locking**
 
@@ -83,6 +85,7 @@ NVIDIA_API_KEY=your_nvidia_api_key_here
 GROQ_API_KEY=your_groq_key
 GEMINI_KEYS=your_gemini_key_1,your_gemini_key_2
 BROWSERLESS_API_KEY=your_browserless_api_key  # opsional, untuk web search
+TAVILY_API_KEY=your_tavily_api_key  # opsional, untuk web search aktif (tavily.com)
 ```
 
 > Lihat [.env.example](.env.example) untuk daftar lengkap variabel yang tersedia.
@@ -104,6 +107,12 @@ python main.py
 | `/clear` | Hapus riwayat percakapan (admin) |
 | `/cuaca` | Cek prakiraan cuaca BMKG |
 | `/report` | Upload laporan batch terbaru |
+
+### Web Search
+| Command | Deskripsi |
+|---------|-----------|
+| `/search` | Cari informasi di web (hasil mentah dengan link) |
+| `/search-ai` | Cari di web lalu minta Mirai jelaskan hasilnya |
 
 ### Kesehatan
 | Command | Deskripsi |
@@ -145,6 +154,7 @@ mirai-helix/
 │   ├── deepseek_client.py   # Client DeepSeek V4 Pro/Flash (NVIDIA NIM)
 │   ├── gemini.py            # Client Google Gemini
 │   ├── web_scraper.py       # Client Browserless REST API
+│   ├── web_search.py        # Client Tavily + DuckDuckGo web search
 │   ├── youtube_transcript.py# Client yt-dlp YouTube transcript
 │   ├── cuaca.py             # Client BMKG cuaca
 │   └── prompts/             # System prompt Mirai
@@ -155,6 +165,7 @@ mirai-helix/
 │   ├── qwen_command.py      # /qwen (backward compat batch)
 │   ├── module_command.py    # /module
 │   ├── greeting_command.py  # /greeting
+│   ├── search_command.py    # /search, /search-ai
 │   └── general.py           # /report
 ├── core/
 │   ├── command.py           # Loader commands (memanggil semua file di commands/)
