@@ -2,6 +2,7 @@
 commands/search_command.py
 ──────────────────────────
 Slash command: /search — pencarian web via Tavily / DuckDuckGo.
+Slash command: /search-ai — pencarian web + penjelasan AI dari Mirai.
 """
 
 import sys
@@ -15,7 +16,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from commands.base import BaseCommand
 from ai.web_search import WebSearchClient
 from ai.gemini import GeminiClient
+from ai.query_reformer import query_reformer
 from core.module_manager import module_manager
+from core.search_session import search_session_manager
 from memory import get_history, add_message, reset_on_context_change
 from utils.identity import resolve_name, clean_name, build_user_context
 from utils.logger import setup_logging
@@ -47,14 +50,18 @@ class SearchCommands(BaseCommand):
             await interaction.response.defer(ephemeral=private, thinking=True)
 
             try:
-                data = await web_search.search(query)
+                reformed_query = query_reformer.reformulate(query)
+                data = await web_search.search(reformed_query)
 
                 if not data or not data.get("results"):
                     await interaction.followup.send(
-                        f"Tidak ada hasil pencarian untuk: **{query}**",
+                        f"Tidak ada hasil pencarian untuk: **{query}**\n"
+                        f"Kemungkinan penyebab: query terlalu spesifik, atau layanan search sedang terganggu.",
                         ephemeral=private,
                     )
                     return
+
+                engine = data.get("engine", "web").capitalize()
 
                 embed = discord.Embed(
                     title=f"Hasil Pencarian: {query}",
@@ -77,14 +84,24 @@ class SearchCommands(BaseCommand):
                     )
 
                 embed.set_footer(
-                    text=f"Diminta oleh {interaction.user.display_name} • Powered by Tavily"
+                    text=f"Diminta oleh {interaction.user.display_name} • Powered by {engine}"
                 )
+
+                search_session_manager.create_or_update_session(
+                    user_id=interaction.user.id,
+                    original_query=query,
+                    reformulated_query=reformed_query,
+                    results=data.get("results", []),
+                    engine=engine.lower(),
+                )
+
                 await interaction.followup.send(embed=embed, ephemeral=private)
 
             except Exception as e:
                 logger.exception("[/search] Error: %s", e)
                 await interaction.followup.send(
-                    f"Terjadi kesalahan: {str(e)[:100]}", ephemeral=private
+                    f"Terjadi kesalahan saat mencari. Silakan coba lagi nanti.",
+                    ephemeral=private,
                 )
 
         # ── /search-ai ──────────────────────────────────────────────────────
@@ -118,13 +135,31 @@ class SearchCommands(BaseCommand):
                 reset_on_context_change(guild_id=guild.id if guild else None, user_id=user.id)
                 user_name = clean_name(resolve_name(interaction))
 
+                reformed_query = query_reformer.reformulate(query)
+
+                data = await web_search.search(reformed_query)
+
+                search_context = ""
+                if data and data.get("results"):
+                    search_context = web_search.format_for_llm(data, reformed_query)
+                    search_session_manager.create_or_update_session(
+                        user_id=user.id,
+                        original_query=query,
+                        reformulated_query=reformed_query,
+                        results=data.get("results", []),
+                        engine=data.get("engine", "web"),
+                    )
+
                 prompt = f"Cari informasi tentang: {query}"
+                if search_context:
+                    prompt = f"Cari informasi tentang: {query}\n\n{search_context}"
+
                 user_context = build_user_context(
                     interaction,
                     extra_info={
                         "Channel": channel_name,
                         "Server": guild.name if guild else "DM",
-                        "Pesan": prompt,
+                        "Pesan": f"Cari informasi tentang: {query}",
                     },
                 )
 
@@ -138,11 +173,14 @@ class SearchCommands(BaseCommand):
 
                 embed = discord.Embed(description=reply, color=0x00FF88)
                 embed.set_author(name=f"Jawaban untuk {user_name}", icon_url=user.display_avatar.url)
-                embed.set_footer(text="Mirai • Web Search + AI")
+
+                engine_name = data.get("engine", "web").capitalize() if data else "Web"
+                embed.set_footer(text=f"Mirai • Web Search + AI • Powered by {engine_name}")
                 await interaction.followup.send(embed=embed, ephemeral=private)
 
             except Exception as e:
                 logger.exception("[/search-ai] Error: %s", e)
                 await interaction.followup.send(
-                    f"Terjadi kesalahan: {str(e)[:100]}", ephemeral=private
+                    f"Terjadi kesalahan saat mencari. Silakan coba lagi nanti.",
+                    ephemeral=private,
                 )

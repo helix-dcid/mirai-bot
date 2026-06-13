@@ -234,7 +234,7 @@ class MessageHandler:
 
             # STEP 4.5: Cek rate limit web scraper (1x per-user per minggu)
             if has_url and self.web_rate_limiter is not None:
-                if module_manager.is_enabled("web_search"):
+                if module_manager.is_enabled("web_scraper"):
                     if not self.web_rate_limiter.can_scrape(user_id):
                         sisa_hari = self.web_rate_limiter.get_remaining_days(user_id)
                         msg = await message.reply(
@@ -297,7 +297,7 @@ class MessageHandler:
 
                 # STEP 6.5: Catat web scraping sukses (setelah Gemini reply)
                 if has_url and self.web_rate_limiter is not None:
-                    if module_manager.is_enabled("web_search"):
+                    if module_manager.is_enabled("web_scraper"):
                         from ai.web_scraper import BrowserlessClient
                         scraper = BrowserlessClient()
                         if scraper.enabled and self.web_rate_limiter.can_scrape(user_id):

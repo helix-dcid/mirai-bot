@@ -38,6 +38,10 @@ class ModuleCommands(BaseCommand):
                 app_commands.Choice(name="News", value="news"),
                 app_commands.Choice(name="Greeting", value="greeting"),
                 app_commands.Choice(name="Wellness", value="wellness"),
+                app_commands.Choice(name="DeepSeek", value="deepseek"),
+                app_commands.Choice(name="Web Scraper", value="web_scraper"),
+                app_commands.Choice(name="YouTube Transcript", value="youtube_transcript"),
+                app_commands.Choice(name="Web Search", value="search"),
             ],
             status=[
                 app_commands.Choice(name="Aktifkan", value="enable"),

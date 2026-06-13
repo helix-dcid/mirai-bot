@@ -29,7 +29,7 @@ class ModuleManager:
             _cache_mtime: timestamp modifikasi file terakhir yang sudah di-cache.
         """
         self._ensure_config_exists()
-        self.modules = ["calculator", "weather", "news", "greeting", "deepseek", "wellness", "web_search", "youtube_transcript", "search"]
+        self.modules = ["calculator", "weather", "news", "greeting", "deepseek", "wellness", "web_scraper", "youtube_transcript", "search"]
         # Cache — baca disk hanya jika file berubah
         self._config_cache: dict = {}
         self._cache_mtime: float = 0.0
@@ -51,11 +51,11 @@ class ModuleManager:
                 "weather": True,
                 "news": True,
                 "greeting": True,
-                "deepseek": True,  # Modul DeepSeek batch processing
-                "wellness": True,  # Modul wellness
-                "web_search": True,  # Modul web scraping via Browserless
-                "youtube_transcript": True,  # Modul YouTube transcript via yt-dlp
-                "search": True,  # Modul web search via Tavily / DuckDuckGo
+                "deepseek": True,
+                "wellness": True,
+                "web_scraper": True,
+                "youtube_transcript": True,
+                "search": True,
             }
             self._save_config(default_config)
             logger.info("[MODULE] Config file dibuat dengan default: semua modul aktif")
@@ -63,14 +63,19 @@ class ModuleManager:
     def _load_config(self):
         """
         Membaca konfigurasi modul dari file JSON.
-        
+
         Returns:
             Dict[str, bool]: Konfigurasi modul. Jika error, return default (semua aktif).
         """
         try:
             with open(MODULE_CONFIG_PATH, 'r') as f:
                 config = json.load(f)
-                # Pastikan semua modul ada di config (untuk kasus update versi)
+
+                if "web_search" in config and "web_scraper" not in config:
+                    config["web_scraper"] = config.pop("web_search")
+                    self._save_config(config)
+                    logger.info("[MODULE] Migrasi: renamed 'web_search' → 'web_scraper'")
+
                 for module in self.modules:
                     if module not in config:
                         config[module] = True
@@ -78,7 +83,6 @@ class ModuleManager:
                 return config
         except Exception as e:
             logger.error(f"[MODULE] Error loading config: {e}")
-            # Return default config jika ada error
             return {m: True for m in self.modules}
 
     def _refresh_cache(self):

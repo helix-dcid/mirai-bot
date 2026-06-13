@@ -30,6 +30,9 @@ from ai.cuaca import BMKGClient
 from ai.web_scraper import BrowserlessClient
 from ai.youtube_transcript import YouTubeTranscriptClient
 from ai.web_search import WebSearchClient
+from ai.intent_classifier import intent_classifier
+from ai.query_reformer import query_reformer
+from core.search_session import search_session_manager
 from config import (
     GEMINI_MODEL,
     GEMINI_API_VERSION,
@@ -369,12 +372,10 @@ class GeminiClient:
     # ------------------------------------------------------------------
     # Web Search context (Tavily / DuckDuckGo)
     # ------------------------------------------------------------------
-    async def _get_search_context(self, user_message: str) -> str:
+    async def _get_search_context(self, user_message: str, history: Optional[List] = None) -> str:
         """
         Deteksi apakah pesan user membutuhkan pencarian web.
-        Jika ya, cari via Tavily/DuckDuckGo dan return konteks untuk AI.
-
-        Trigger: kata kunci pencarian + pertanyaan faktual tentang topik terkini.
+        Menggunakan IntentClassifier + QueryReformer untuk deteksi dan reformulasi.
         """
         if not self.web_search.enabled:
             return ""
@@ -383,32 +384,23 @@ class GeminiClient:
         if not module_manager.is_enabled("search"):
             return ""
 
-        msg_lower = user_message.lower()
+        intent = intent_classifier.classify(user_message, history)
 
-        search_triggers = [
-            "cari", "search", "google", "cariin", "carikan",
-            "info terbaru", "berita terbaru", "update terbaru",
-            "trending", "riset", "research",
-        ]
-        question_words = [
-            "siapa", "apa itu", "kapan", "dimana", "mengapa",
-            "bagaimana", "jelaskan tentang", "ceritakan tentang",
-            "apa kabar", "berapa",
-        ]
-
-        has_trigger = any(kw in msg_lower for kw in search_triggers)
-        has_question = any(kw in msg_lower for kw in question_words)
-        is_question_mark = user_message.strip().endswith("?")
-
-        if not has_trigger and not (has_question and is_question_mark):
+        if intent["intent"] != "search":
             return ""
 
+        logger.debug(f"[Gemini] Search intent: {intent}")
+
+        reformed_query = query_reformer.reformulate(user_message, history, intent)
+        if not reformed_query:
+            reformed_query = user_message
+
         try:
-            data = await self.web_search.search(user_message)
+            data = await self.web_search.search(reformed_query)
             if not data or not data.get("results"):
                 return ""
 
-            return self.web_search.format_for_llm(data, user_message)
+            return self.web_search.format_for_llm(data, reformed_query)
 
         except Exception as e:
             logger.warning(f"[Gemini] Failed to get search context: {e}")
@@ -466,23 +458,24 @@ class GeminiClient:
     # Build payload (system instruction + contents)
     # ------------------------------------------------------------------
     async def _build_payload(
-        self, 
-        history: List[Dict], 
-        temperature: float, 
+        self,
+        history: List[Dict],
+        temperature: float,
         user_context: str
     ) -> Dict:
         """Build API request payload."""
-        # Get weather, webpage, youtube & search context if needed
         weather_ctx = ""
         webpage_ctx = ""
         youtube_ctx = ""
         search_ctx = ""
         if history and history[-1].get("role") == "user":
             last_msg = self._extract_text_from_message(history[-1])
-            weather_ctx = await self._get_weather_context(last_msg)
-            webpage_ctx = await self._get_webpage_context(last_msg)
-            youtube_ctx = await self._get_youtube_transcript_context(last_msg)
-            search_ctx = await self._get_search_context(last_msg)
+            weather_ctx, webpage_ctx, youtube_ctx, search_ctx = await asyncio.gather(
+                self._get_weather_context(last_msg),
+                self._get_webpage_context(last_msg),
+                self._get_youtube_transcript_context(last_msg),
+                self._get_search_context(last_msg, history),
+            )
         
         # Build full system instruction
         full_system = (

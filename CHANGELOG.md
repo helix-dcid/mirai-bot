@@ -1,5 +1,42 @@
 # Changelog - Mirai Helix
 
+## [3.6.0] - 2026-06-13
+### ✨ Added
+- **Intent Classifier** (`ai/intent_classifier.py`): Klasifikasi niat user (search vs chat) menggunakan keyword matching yang diperluas + negative triggers.
+  - 40+ search triggers (termasuk "rekomendasi", "review", "tips", "harga", "alternatif", dll).
+  - Negative triggers untuk mengurangi false positive ("cari perhatian", "cari makan", dll).
+  - Follow-up detection ("lebih detail", "yang tadi", "coba cari lagi", dll).
+- **Query Reformer** (`ai/query_reformer.py`): Mengubah pesan percakapan menjadi query pencarian optimal.
+  - Strip conversational fillers ("aku", "nih", "dong", "tolong", dll).
+  - Strip mention & greeting patterns.
+  - Context-aware: follow-up question menggunakan konteks dari history percakapan.
+- **Search Session Tracker** (`core/search_session.py`): Melacak sesi pencarian per user (TTL 10 menit) untuk mendukung multi-turn search conversations.
+- **Adaptive Search Depth**: Query kompleks (>8 kata atau mengandung `?`) otomatis menggunakan depth "advanced".
+
+### 🐛 Fixed
+- **`/search-ai` tidak memanggil web search**: Command sekarang secara eksplisit memanggil `web_search.search()` sebelum mengirim ke Gemini, bukan bergantung pada trigger keyword detection di GeminiClient.
+- **Mutasi `self.max_results` secara permanen**: Sekarang menggunakan variabel lokal `effective_max` sehingga state instance tidak berubah.
+- **Property `enabled` selalu True**: Sekarang mengecek ketersediaan Tavily key ATAU library `duckduckgo-search` secara realistis.
+- **Naming modul membingungkan**: Modul `"web_search"` (Browserless scraping) di-rename ke `"web_scraper"`. Modul `"search"` tetap (Tavily/DDG). Auto-migrasi key di config JSON.
+- **Modul search/scraper tidak muncul di `/module toggle`**: Ditambahkan Web Scraper, Web Search, DeepSeek, YouTube Transcript ke daftar choices.
+- **Footer embed selalu "Powered by Tavily"**: Sekarang menampilkan engine yang sebenarnya dipakai (tavily/duckduckgo).
+- **Error feedback kurang informatif**: Pesan error sekarang menjelaskan kemungkinan penyebab kegagalan.
+
+### ⚡ Improved
+- **Persistent aiohttp session**: `WebSearchClient` sekarang me-reuse satu `aiohttp.ClientSession` untuk semua request Tavily, mengurangi overhead TCP/TLS. Method `close()` ditambahkan untuk cleanup saat shutdown.
+- **Retry dengan exponential backoff**: Tavily retry hingga 2x untuk transient errors (500, 502, 503, 504, timeout) sebelum fallback ke DuckDuckGo. Tidak retry untuk 401 (invalid key) atau 429 (rate limited).
+- **Paralel context getter**: Empat context getter (weather, webpage, YouTube, search) di `_build_payload()` sekarang berjalan paralel via `asyncio.gather()`, mengurangi latency signifikan.
+- **Query validation**: Query divalidasi — minimal 2 karakter, maksimal 500 karakter. Query kosong langsung return None.
+- **Sitasi terstruktur**: `format_for_llm()` sekarang menginstruksikan AI untuk menyertakan nomor sumber [1][2] dan section "Sumber:" di akhir jawaban.
+- **Follow-up suggestions**: AI diinstruksikan menawarkan 2-3 pertanyaan lanjutan setelah jawaban berbasis search.
+- **`/search` dan `/search-ai` menggunakan Query Reformer**: Query percakapan user otomatis direformulasi sebelum dikirim ke search engine.
+- **Search Session tracking**: Hasil search disimpan per user untuk mendukung context-aware follow-up questions.
+
+### 🔧 Changed
+- **`core/module_manager.py`**: Modul `"web_search"` → `"web_scraper"`. Auto-migrasi config lama.
+- **`core/events/message_handler.py`**: Update referensi `"web_search"` → `"web_scraper"`.
+- **`commands/module_command.py`**: Ditambahkan 4 modul baru ke toggle choices (DeepSeek, Web Scraper, YouTube Transcript, Web Search).
+
 ## [3.5.0] - 2026-06-13
 ### ✨ Added
 - **Web Search via Tavily + DuckDuckGo**: Pencarian web aktif untuk pertanyaan user tentang informasi terkini.
