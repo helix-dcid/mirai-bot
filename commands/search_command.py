@@ -18,7 +18,7 @@ from ai.web_search import WebSearchClient
 from ai.gemini import GeminiClient
 from ai.query_reformer import query_reformer
 from core.module_manager import module_manager
-from core.search_session import search_session_manager
+from tools.search_session import search_session_manager
 from memory import get_history, add_message, reset_on_context_change
 from utils.identity import resolve_name, clean_name, build_user_context
 from utils.logger import setup_logging

@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from utils.logger import setup_logging
 from ai.news_summary import run_summary
 from core.module_manager import module_manager
-import core.qwen_batch as qwen_batch
+import tools.qwen_batch as qwen_batch
 import psutil
 import requests
 import aiohttp

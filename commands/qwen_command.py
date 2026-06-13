@@ -11,7 +11,7 @@ import discord
 from discord import app_commands
 from commands.base import BaseCommand
 from core.module_manager import module_manager
-import core.qwen_batch as qwen_batch
+import tools.qwen_batch as qwen_batch
 from utils.logger import setup_logging
 
 logger = setup_logging()

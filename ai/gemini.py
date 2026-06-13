@@ -32,7 +32,7 @@ from ai.youtube_transcript import YouTubeTranscriptClient
 from ai.web_search import WebSearchClient
 from ai.intent_classifier import intent_classifier
 from ai.query_reformer import query_reformer
-from core.search_session import search_session_manager
+from tools.search_session import search_session_manager
 from config import (
     GEMINI_MODEL,
     GEMINI_API_VERSION,

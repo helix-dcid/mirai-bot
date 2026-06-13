@@ -17,7 +17,7 @@ class GreetingCommands(BaseCommand):
 
         @greeting_group.command(name="status", description="Cek status fitur greeting di server ini")
         async def greeting_status(interaction: discord.Interaction):
-            from core.auto_greeting import auto_greeting
+            from tools.auto_greeting import auto_greeting
 
             enabled = auto_greeting.is_enabled(interaction.guild_id)
             config = auto_greeting._load_config()
@@ -38,7 +38,7 @@ class GreetingCommands(BaseCommand):
         ])
         @app_commands.default_permissions(administrator=True)
         async def greeting_toggle(interaction: discord.Interaction, status: app_commands.Choice[str]):
-            from core.auto_greeting import auto_greeting
+            from tools.auto_greeting import auto_greeting
 
             is_enabled = status.value == "enable"
             auto_greeting.set_enabled(interaction.guild_id, is_enabled)
@@ -49,7 +49,7 @@ class GreetingCommands(BaseCommand):
         @app_commands.describe(channel="Pilih channel untuk pesan greeting")
         @app_commands.default_permissions(administrator=True)
         async def greeting_setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
-            from core.auto_greeting import auto_greeting
+            from tools.auto_greeting import auto_greeting
 
             auto_greeting.set_channel(interaction.guild_id, channel.id)
             await interaction.response.send_message(f"✅ Channel greeting diatur ke {channel.mention}.", ephemeral=True)

@@ -10,8 +10,8 @@ from utils.logger import setup_logging
 from utils.sentiment import analyze_sentiment, get_mood_emoji
 from utils.wellness import get_wellness_reminder, should_give_reminder
 from utils.identity import resolve_name, clean_name, build_user_context
-from core.file_reading import build_attachment_context
-import core.qwen_batch as qwen_batch
+from tools.file_reading import build_attachment_context
+import tools.qwen_batch as qwen_batch
 from config import COOLDOWN_REPLY_DELAY
 from core.module_manager import module_manager
 

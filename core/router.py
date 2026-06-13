@@ -3,7 +3,7 @@ from core.events.message_handler import MessageHandler
 from services.ai_service import AIService
 from services.scheduler_service import SchedulerService
 from managers.cooldown_manager import CooldownManager
-from core.micro_rag import MicroRAG
+from tools.micro_rag import MicroRAG
 from core.command import CommandGroup
 from utils.web_rate_limiter import WebRateLimiter
 from utils.logger import setup_logging
@@ -36,7 +36,7 @@ class Router:
         )
         
         # Inisialisasi AutoGreeting SEKALI — jangan di on_ready (hindari duplikat handler saat reconnect)
-        from core.auto_greeting import AutoGreeting
+        from tools.auto_greeting import AutoGreeting
         from ai.gemini import GeminiClient
         self.auto_greeting = AutoGreeting(self.bot, GeminiClient())
         

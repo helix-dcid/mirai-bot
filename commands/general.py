@@ -37,7 +37,7 @@ class GeneralCommands(BaseCommand):
 
             # Kirim ke channel
             try:
-                from core import qwen_batch
+                from tools import qwen_batch
                 header = f"📊 **Laporan Batch Terbaru** — `{latest.name}`\n\n"
                 for chunk in qwen_batch.split_for_discord(header + content):
                     await target.send(chunk)
