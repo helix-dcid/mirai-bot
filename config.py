@@ -64,5 +64,15 @@ BROWSERLESS_CACHE_TTL = 300  # Cache scrap per URL, 5 menit
 YOUTUBE_TRANSCRIPT_CACHE_TTL = 3600  # Cache transcript per video ID, 1 jam
 YOUTUBE_TRANSCRIPT_MAX_CHARS = 10000  # Maks karakter transkrip yang diekstrak
 YOUTUBE_TRANSCRIPT_SUB_LANGS = ["id", "en"]  # Prioritas bahasa subtitle
+
+# ===== WEB SEARCH (TAVILY) CONFIG =====
+TAVILY_API_KEY = os.getenv('TAVILY_API_KEY', '')
+TAVILY_BASE_URL = "https://api.tavily.com"
+TAVILY_TIMEOUT = 15                # Timeout per request (detik)
+TAVILY_MAX_RESULTS = 5             # Jumlah hasil pencarian maksimal
+TAVILY_MAX_CHARS = 8000            # Maks karakter total konten hasil search
+TAVILY_CACHE_TTL = 300             # Cache per query, 5 menit
+TAVILY_SEARCH_DEPTH = "basic"      # "basic" atau "advanced" (lebih lambat, lebih dalam)
+
 # ===== WEB SEARCH RATE LIMITER CONFIG =====
 WEB_SEARCH_COOLDOWN_DAYS = 7  # 1x scrap per user per N hari

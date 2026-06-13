@@ -29,7 +29,7 @@ class ModuleManager:
             _cache_mtime: timestamp modifikasi file terakhir yang sudah di-cache.
         """
         self._ensure_config_exists()
-        self.modules = ["calculator", "weather", "news", "greeting", "deepseek", "wellness", "web_search", "youtube_transcript"]
+        self.modules = ["calculator", "weather", "news", "greeting", "deepseek", "wellness", "web_search", "youtube_transcript", "search"]
         # Cache — baca disk hanya jika file berubah
         self._config_cache: dict = {}
         self._cache_mtime: float = 0.0
@@ -55,6 +55,7 @@ class ModuleManager:
                 "wellness": True,  # Modul wellness
                 "web_search": True,  # Modul web scraping via Browserless
                 "youtube_transcript": True,  # Modul YouTube transcript via yt-dlp
+                "search": True,  # Modul web search via Tavily / DuckDuckGo
             }
             self._save_config(default_config)
             logger.info("[MODULE] Config file dibuat dengan default: semua modul aktif")

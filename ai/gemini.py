@@ -29,6 +29,7 @@ from ai.time import get_wib_time, get_wib_time_str
 from ai.cuaca import BMKGClient
 from ai.web_scraper import BrowserlessClient
 from ai.youtube_transcript import YouTubeTranscriptClient
+from ai.web_search import WebSearchClient
 from config import (
     GEMINI_MODEL,
     GEMINI_API_VERSION,
@@ -146,6 +147,7 @@ class GeminiClient:
         self.bmkg = BMKGClient()
         self.web_scraper = BrowserlessClient()
         self.youtube_transcript = YouTubeTranscriptClient()
+        self.web_search = WebSearchClient()
         self.system_prompt = SYSTEM_PROMPT
         self.news_summary = NEWS_SUMMARY
         self._cache = {}
@@ -365,6 +367,54 @@ class GeminiClient:
             return ""
 
     # ------------------------------------------------------------------
+    # Web Search context (Tavily / DuckDuckGo)
+    # ------------------------------------------------------------------
+    async def _get_search_context(self, user_message: str) -> str:
+        """
+        Deteksi apakah pesan user membutuhkan pencarian web.
+        Jika ya, cari via Tavily/DuckDuckGo dan return konteks untuk AI.
+
+        Trigger: kata kunci pencarian + pertanyaan faktual tentang topik terkini.
+        """
+        if not self.web_search.enabled:
+            return ""
+
+        from core.module_manager import module_manager
+        if not module_manager.is_enabled("search"):
+            return ""
+
+        msg_lower = user_message.lower()
+
+        search_triggers = [
+            "cari", "search", "google", "cariin", "carikan",
+            "info terbaru", "berita terbaru", "update terbaru",
+            "trending", "riset", "research",
+        ]
+        question_words = [
+            "siapa", "apa itu", "kapan", "dimana", "mengapa",
+            "bagaimana", "jelaskan tentang", "ceritakan tentang",
+            "apa kabar", "berapa",
+        ]
+
+        has_trigger = any(kw in msg_lower for kw in search_triggers)
+        has_question = any(kw in msg_lower for kw in question_words)
+        is_question_mark = user_message.strip().endswith("?")
+
+        if not has_trigger and not (has_question and is_question_mark):
+            return ""
+
+        try:
+            data = await self.web_search.search(user_message)
+            if not data or not data.get("results"):
+                return ""
+
+            return self.web_search.format_for_llm(data, user_message)
+
+        except Exception as e:
+            logger.warning(f"[Gemini] Failed to get search context: {e}")
+            return ""
+
+    # ------------------------------------------------------------------
     # Weather context
     # ------------------------------------------------------------------
     async def _get_weather_context(self, user_message: str) -> str:
@@ -422,15 +472,17 @@ class GeminiClient:
         user_context: str
     ) -> Dict:
         """Build API request payload."""
-        # Get weather, webpage & youtube context if needed
+        # Get weather, webpage, youtube & search context if needed
         weather_ctx = ""
         webpage_ctx = ""
         youtube_ctx = ""
+        search_ctx = ""
         if history and history[-1].get("role") == "user":
             last_msg = self._extract_text_from_message(history[-1])
             weather_ctx = await self._get_weather_context(last_msg)
             webpage_ctx = await self._get_webpage_context(last_msg)
             youtube_ctx = await self._get_youtube_transcript_context(last_msg)
+            search_ctx = await self._get_search_context(last_msg)
         
         # Build full system instruction
         full_system = (
@@ -439,6 +491,7 @@ class GeminiClient:
             weather_ctx +
             webpage_ctx +
             youtube_ctx +
+            search_ctx +
             self.news_summary +
             user_context
         )
