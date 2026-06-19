@@ -1,24 +1,20 @@
 # ai/gemini.py
-"""Klien async untuk Google Gemini.
+"""Klien async untuk Google Gemini dengan Function Calling.
 
 Fitur utama:
+- Gemini native function calling (tool calling) untuk weather, search, news
+- Deterministic URL detection (webpage + YouTube) tanpa LLM
+- 2-turn flow: Turn 1 → functionCall detection → execute → Turn 2
 - Semaphore (max 3 concurrent requests)
 - Circuit‑breaker (threshold 5×503, cooldown 30 s)
 - Cache TTL 5 menit
 - Rotasi API‑key dengan cooldown per key
 - Dynamic temperature (lebih rendah untuk pertanyaan faktual)
-- Sistem prompt + cuaca + ringkasan berita + konteks user
-
-FIXED ISSUES:
-- Improved async/await consistency
-- Better error handling and logging
-- Proper timeout handling
-- Cleaner code structure
-- Fixed potential race conditions
 """
 
 import os
 import json
+import copy
 import time
 import asyncio
 import aiohttp
@@ -30,9 +26,9 @@ from ai.cuaca import BMKGClient
 from ai.web_scraper import BrowserlessClient
 from ai.youtube_transcript import YouTubeTranscriptClient
 from ai.web_search import WebSearchClient
-from ai.intent_classifier import intent_classifier
-from ai.query_reformer import query_reformer
-from tools.search_session import search_session_manager
+from core.module_manager import module_manager
+from ai.tool_definitions import get_active_tools
+from ai.tool_executor import ToolExecutor
 from config import (
     GEMINI_MODEL,
     GEMINI_API_VERSION,
@@ -41,7 +37,6 @@ from config import (
     TOP_P,
     REQUEST_TIMEOUT,
     KEY_COOLDOWN_DURATION,
-    NEWS_SUMMARY_PATH,
 )
 from utils.logger import setup_logging
 
@@ -49,11 +44,10 @@ load_dotenv()
 logger = setup_logging()
 
 # ----------------------------------------------------------------------
-# 1️⃣  Prompt & ringkasan berita
+# 1️⃣  System prompt
 # ----------------------------------------------------------------------
 BASE_URL = f"https://generativelanguage.googleapis.com/{GEMINI_API_VERSION}/models"
 PROMPT_PATH = Path(__file__).parent / "prompts" / "mirai_system_prompt.txt"
-NEWS_SUMMARY_FILE = Path(NEWS_SUMMARY_PATH)
 
 def _load_system_prompt() -> str:
     """Load system prompt from file with fallback."""
@@ -73,32 +67,7 @@ def _load_system_prompt() -> str:
         "Gaya bicara semi‑informal Jakarta, hangat, sesekali keibuan."
     )
 
-def _load_news_summary() -> str:
-    """Load news summary from file with error handling."""
-    try:
-        if not NEWS_SUMMARY_FILE.exists():
-            return ""
-        
-        data = json.loads(NEWS_SUMMARY_FILE.read_text(encoding="utf-8"))
-        summary = str(data.get("summary", "")).strip()
-        if not summary:
-            return ""
-        
-        sources = data.get("sources", [])
-        generated_at = str(data.get("generated_at", "")).strip()
-        
-        src_txt = ""
-        if isinstance(sources, list) and sources:
-            src_txt = "\nSumber: " + ", ".join(str(s).strip() for s in sources if str(s).strip())
-        
-        meta = f" (generated_at: {generated_at})" if generated_at else ""
-        return f"\n\n[RINGKASAN BERITA TERKINI{meta}]\n{summary}{src_txt}\n"
-    except Exception as e:
-        logger.exception("[Gemini] Gagal baca news summary: %s", e)
-        return ""
-
 SYSTEM_PROMPT = _load_system_prompt()
-NEWS_SUMMARY = _load_news_summary()
 
 # ----------------------------------------------------------------------
 # 2️⃣  Circuit‑breaker & semaphore
@@ -152,21 +121,24 @@ class GeminiClient:
         self.youtube_transcript = YouTubeTranscriptClient()
         self.web_search = WebSearchClient()
         self.system_prompt = SYSTEM_PROMPT
-        self.news_summary = NEWS_SUMMARY
+        self._tool_executor: Optional[ToolExecutor] = None
         self._cache = {}
         self._CACHE_TTL = 300
         self._KEY_COOLDOWN = {}
         self._cache_lock = asyncio.Lock()
         logger.info(f"[Gemini] Initialized with {len(self.api_keys)} API key(s)")
+        logger.info("[Gemini] Function calling mode: active (weather, search, news via tool calling)")
 
     # ------------------------------------------------------------------
     # Cache helpers
     # ------------------------------------------------------------------
-    def _make_cache_key(self, history: List[Dict], user_context: str, temperature: float) -> int:
-        """Create cache key from request parameters."""
+    def _make_cache_key(self, history: List[Dict], user_context: str, temperature: float, tools_state: str = "") -> int:
+        """Create cache key from request parameters.
+        Includes tools_state to invalidate cache when modules are toggled.
+        """
         try:
             payload = json.dumps(
-                {"h": history, "c": user_context, "t": temperature}, 
+                {"h": history, "c": user_context, "t": temperature, "ts": tools_state},
                 sort_keys=True
             )
             return hash(payload)
@@ -211,15 +183,23 @@ class GeminiClient:
     # ------------------------------------------------------------------
     def _simple_response(self, history: List[Dict], user_context: str) -> Optional[str]:
         """Provide simple responses for time/date queries without API call."""
+        search_noise = [
+            "cari", "carikan", "berita", "info", "kabar", "update",
+            "search", "google", "riset", "research", "trending",
+            "tentang", "soal", "mengenai", "terkait",
+        ]
+
         for msg in reversed(history):
             if msg.get("role") == "user":
                 txt = self._extract_text_from_message(msg)
                 txt_lower = txt.lower()
 
+                if any(kw in txt_lower for kw in search_noise):
+                    break
+
                 if "jam" in txt_lower and "berapa" in txt_lower:
-                    # get_wib_time() returns datetime → .strftime() is valid ✅
                     return f"Sekarang jam {get_wib_time().strftime('%H:%M')} WIB."
-                if "tanggal" in txt_lower or "hari ini" in txt_lower:
+                if "tanggal" in txt_lower and ("berapa" in txt_lower or "hari ini" in txt_lower):
                     return f"Hari ini tanggal {get_wib_time().strftime('%d-%m-%Y')} WIB."
                 break
         return None
@@ -300,8 +280,6 @@ class GeminiClient:
         if not self.youtube_transcript.enabled:
             return ""
         
-        # Cek module manager
-        from core.module_manager import module_manager
         if not module_manager.is_enabled("youtube_transcript"):
             return ""
         
@@ -370,144 +348,77 @@ class GeminiClient:
             return ""
 
     # ------------------------------------------------------------------
-    # Web Search context (Tavily / DuckDuckGo)
+    # Deterministic URL context (webpage + YouTube)
     # ------------------------------------------------------------------
-    async def _get_search_context(self, user_message: str, history: Optional[List] = None) -> str:
+    async def _detect_and_fetch_url_context(self, user_message: str) -> str:
         """
-        Deteksi apakah pesan user membutuhkan pencarian web.
-        Menggunakan IntentClassifier + QueryReformer untuk deteksi dan reformulasi.
+        Regex-detect URLs and fetch context deterministically.
+        Returns combined webpage + youtube context string.
+        Called before payload building — no LLM needed for URL detection.
         """
-        if not self.web_search.enabled:
-            return ""
+        contexts = []
 
-        from core.module_manager import module_manager
-        if not module_manager.is_enabled("search"):
-            return ""
+        if module_manager.is_enabled("youtube_transcript"):
+            yt_ctx = await self._get_youtube_transcript_context(user_message)
+            if yt_ctx:
+                contexts.append(yt_ctx)
 
-        intent = intent_classifier.classify(user_message, history)
+        if module_manager.is_enabled("web_scraper"):
+            web_ctx = await self._get_webpage_context(user_message)
+            if web_ctx:
+                contexts.append(web_ctx)
 
-        if intent["intent"] != "search":
-            return ""
-
-        logger.debug(f"[Gemini] Search intent: {intent}")
-
-        reformed_query = query_reformer.reformulate(user_message, history, intent)
-        if not reformed_query:
-            reformed_query = user_message
-
-        try:
-            data = await self.web_search.search(reformed_query)
-            if not data or not data.get("results"):
-                return ""
-
-            return self.web_search.format_for_llm(data, reformed_query)
-
-        except Exception as e:
-            logger.warning(f"[Gemini] Failed to get search context: {e}")
-            return ""
-
-    # ------------------------------------------------------------------
-    # Weather context
-    # ------------------------------------------------------------------
-    async def _get_weather_context(self, user_message: str) -> str:
-        """Get weather context if user asks about weather."""
-        # Trigger cuaca bila pesan mengandung kata kunci cuaca atau deskripsi cuaca umum
-        triggers = [
-            "cuaca", "hujan", "panas", "mendung", "cerah", "suhu",
-            "dingin", "angin", "berawan", "lembab", "kota", "bmkg",
-        ]
-        if not any(kw in user_message.lower() for kw in triggers):
-            return ""
-        
-        try:
-            loc = self.bmkg.extract_location_from_text(user_message)
-            if not loc:
-                # Jika ada trigger cuaca tapi lokasi tidak disebut, gunakan default (Jakarta)
-                loc = "Jakarta"
-            
-            code = await self.bmkg.search_location_code(loc)
-            if not code:
-                return ""
-            
-            data = await self.bmkg.get_weather_raw(code)
-            if not data:
-                return ""
-            
-            weather_ctx = (
-                f"\n\n[DATA CUACA BMKG REAL-TIME UNTUK {loc.upper()}]\n"
-                f"Lokasi: {data['lokasi']['desa']}, {data['lokasi']['kecamatan']}, {data['lokasi']['kotkab']}\n"
-                "Prakiraan terdekat:\n"
-            )
-            for f in data["prakiraan"]:
-                weather_ctx += (
-                    f"- Jam {f['local_datetime']}: {f['weather_desc']}, "
-                    f"Suhu {f['t']}°C, Kelembapan {f['hu']}%\n"
-                )
-            weather_ctx += (
-                "\n⚠️ INSTRUKSI PENTING: Data cuaca di atas adalah data REAL-TIME dari BMKG."
-                "\nGunakan data ini untuk menjawab pertanyaan user. Jangan bilang kamu tidak punya akses "
-                "atau tidak bisa mengecek cuaca — karena data sudah tersedia di atas. "
-                "Jawab dengan gaya ramah Mirai dan sertakan saran kesehatan bila relevan."
-            )
-            return weather_ctx
-        except Exception as e:
-            logger.warning(f"[Gemini] Failed to get weather context: {e}")
-            return ""
+        return "".join(contexts)
 
     # ------------------------------------------------------------------
     # Build payload (system instruction + contents)
     # ------------------------------------------------------------------
-    async def _build_payload(
+    async    def _build_payload(
         self,
         history: List[Dict],
         temperature: float,
-        user_context: str
+        user_context: str,
+        url_context: str = "",
+        tools: list[dict] | None = None,
     ) -> Dict:
-        """Build API request payload."""
-        weather_ctx = ""
-        webpage_ctx = ""
-        youtube_ctx = ""
-        search_ctx = ""
-        if history and history[-1].get("role") == "user":
-            last_msg = self._extract_text_from_message(history[-1])
-            weather_ctx, webpage_ctx, youtube_ctx, search_ctx = await asyncio.gather(
-                self._get_weather_context(last_msg),
-                self._get_webpage_context(last_msg),
-                self._get_youtube_transcript_context(last_msg),
-                self._get_search_context(last_msg, history),
-            )
-        
-        # Build full system instruction
+        """Build API request payload.
+
+        Args:
+            history: Conversation history messages.
+            temperature: Sampling temperature.
+            user_context: Micro-RAG user profile context.
+            url_context: Pre-fetched webpage/youtube context (deterministic).
+            tools: Gemini function declarations (only enabled modules).
+        """
         full_system = (
             self.system_prompt +
             f"\n\nInformasi waktu saat ini: {get_wib_time_str()}\n" +
-            weather_ctx +
-            webpage_ctx +
-            youtube_ctx +
-            search_ctx +
-            self.news_summary +
+            url_context +
             user_context
         )
         system_instruction = {"parts": [{"text": full_system}]}
 
-        # Prepare conversation history (max 6 messages to save tokens)
         trimmed = history[-6:] if isinstance(history, list) else []
         contents = []
-        
+
         for msg in trimmed:
             role = msg.get("role")
             if role == "assistant":
                 role = "model"
-            
-            text = self._extract_text_from_message(msg)
-            if text:
-                contents.append({"role": role, "parts": [{"text": text}]})
-        
-        # Ensure at least one message
+
+            parts = msg.get("parts", [])
+            if parts:
+                # Pass through ALL parts (text, functionCall, functionResponse)
+                contents.append({"role": role, "parts": parts})
+            else:
+                text = msg.get("content", "")
+                if text:
+                    contents.append({"role": role, "parts": [{"text": text}]})
+
         if not contents:
             contents.append({"role": "user", "parts": [{"text": "Halo"}]})
 
-        return {
+        payload = {
             "system_instruction": system_instruction,
             "contents": contents,
             "generationConfig": {
@@ -517,27 +428,35 @@ class GeminiClient:
             },
         }
 
+        if tools:
+            payload["tools"] = tools
+
+        return payload
+
     # ------------------------------------------------------------------
     # API request with retry logic
     # ------------------------------------------------------------------
     async def _make_api_request(
-        self, 
-        payload: Dict, 
+        self,
+        payload: Dict,
         attempt: int
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[dict]]:
         """
         Make API request with current key.
-        Returns (success: bool, response: Optional[str])
+
+        Returns:
+            (success, response_dict) where response_dict is:
+              {"type": "text", "text": "..."}          — plain text response
+              {"type": "functionCall", "name": ..., "args": ...}  — tool call
         """
-        # Check if current key is in cooldown
         if (
             self.api_key in self._KEY_COOLDOWN and
             time.time() < self._KEY_COOLDOWN[self.api_key]
         ):
             return False, None
-        
+
         params = {"key": self.api_key}
-        
+
         try:
             async with _gemini_semaphore:
                 timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
@@ -547,41 +466,45 @@ class GeminiClient:
                         params=params,
                         json=payload,
                     ) as resp:
-                        # Handle 503 Service Unavailable
                         if resp.status == 503:
                             await _increase_503_counter()
                             logger.warning(f"[Gemini] 503 error with key #{self.key_index+1}")
                             await asyncio.sleep(min(2 ** attempt, 60))
                             return False, None
-                        
-                        # Handle client errors (4xx)
+
                         if 400 <= resp.status < 500:
                             txt = await resp.text()
                             logger.error(f"[Gemini] Client error {resp.status}: {txt}")
-                            # Jangan cache error client, tandai gagal sehingga rotasi key
                             return False, None
-                        
-                        # Handle server errors (5xx) except 503
+
                         if resp.status >= 500:
                             txt = await resp.text()
                             logger.error(f"[Gemini] Server error {resp.status}: {txt}")
                             return False, None
-                        
-                        # Success - parse response
+
                         data = await resp.json()
                         await _reset_503_counter()
-                        
+
                         candidates = data.get("candidates", [])
                         if not candidates:
-                            return True, "[Gemini] Tidak ada kandidat dalam response."
-                        
+                            return True, {"type": "text", "text": "[Gemini] Tidak ada kandidat."}
+
                         parts = candidates[0].get("content", {}).get("parts", [])
                         if not parts:
-                            return True, "[Gemini] Response kosong."
-                        
+                            return True, {"type": "text", "text": "[Gemini] Response kosong."}
+
+                        for part in parts:
+                            if "functionCall" in part:
+                                fc = part["functionCall"]
+                                return True, {
+                                    "type": "functionCall",
+                                    "name": fc.get("name", ""),
+                                    "args": fc.get("args", {}),
+                                }
+
                         text = "".join(p.get("text", "") for p in parts).strip()
-                        return True, text
-                        
+                        return True, {"type": "text", "text": text}
+
         except asyncio.TimeoutError:
             logger.warning(f"[Gemini] Timeout dengan key #{self.key_index+1}")
             self._KEY_COOLDOWN[self.api_key] = time.time() + KEY_COOLDOWN_DURATION
@@ -603,7 +526,69 @@ class GeminiClient:
                 await asyncio.sleep(wait)
 
     # ------------------------------------------------------------------
-    # Public async generate
+    # Helper: try all keys with retry
+    # ------------------------------------------------------------------
+    async def _try_all_keys(self, payload: Dict) -> Optional[dict]:
+        """Try all API keys with retry logic. Returns response dict or None."""
+        attempts = 0
+        max_attempts = len(self.api_keys) * 2
+
+        while attempts < max_attempts:
+            success, response = await self._make_api_request(payload, attempts)
+            if success and response:
+                return response
+            await self._rotate_to_next_key()
+            attempts += 1
+
+        await _increase_503_counter()
+        logger.error("[Gemini] Semua API key gagal setelah semua attempts")
+        return None
+
+    # ------------------------------------------------------------------
+    # Helper: build Turn 2 payload with function response
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _build_turn2_payload(
+        original_payload: Dict,
+        function_call: dict,
+        function_response: dict,
+    ) -> Dict:
+        """Append functionCall + functionResponse to contents, remove tools."""
+        payload = copy.deepcopy(original_payload)
+
+        payload["contents"].append({
+            "role": "model",
+            "parts": [{"functionCall": {
+                "name": function_call["name"],
+                "args": function_call["args"],
+            }}],
+        })
+
+        payload["contents"].append({
+            "role": "user",
+            "parts": [{"functionResponse": {
+                "name": function_response["name"],
+                "response": function_response["response"],
+            }}],
+        })
+
+        payload.pop("tools", None)
+        return payload
+
+    # ------------------------------------------------------------------
+    # Helper: fallback text when Turn 2 fails
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _format_tool_fallback(function_call: dict, function_response: dict) -> str:
+        """Format a human-readable fallback when Turn 2 API call fails."""
+        name = function_call.get("name", "tool")
+        resp = function_response.get("response", {})
+        if isinstance(resp, dict) and resp.get("error"):
+            return f"Hmm, sepertinya {name} gagal: {resp['error']}. Coba lagi nanti ya."
+        return f"Data dari {name} berhasil diambil tapi aku gagal memproses jawabannya. Coba tanya lagi ya."
+
+    # ------------------------------------------------------------------
+    # Public async generate (2-turn function calling flow)
     # ------------------------------------------------------------------
     async def generate(
         self,
@@ -612,60 +597,109 @@ class GeminiClient:
         user_context: str = "",
     ) -> str:
         """
-        Generate AI response from conversation history.
-        
-        Args:
-            history: List of conversation messages
-            temperature: Sampling temperature (0.0-1.0)
-            user_context: Additional context about the user
-            
-        Returns:
-            Generated response text
+        Generate AI response with optional function calling.
+
+        Flow:
+          1. Detect URLs deterministically (webpage/youtube)
+          2. Get active tools from module manager
+          3. Turn 1: POST to Gemini with tools[]
+          4. If text → done (1 API call)
+          5. If functionCall → execute tool → Turn 2 → done (2 API calls)
         """
-        # Check circuit breaker
         if await _is_circuit_breaker_active():
             logger.warning("[Gemini] Circuit breaker active, request blocked")
             return "[Gemini] Service overload, coba lagi nanti."
 
-        # Try simple response for common queries
         quick = self._simple_response(history, user_context)
         if quick:
             logger.debug("[Gemini] Using quick response")
             return quick
 
-        # Use dynamic temperature
         dyn_temp = self._smart_temperature(history)
 
-        # Check cache
-        cache_key = self._make_cache_key(history, user_context, dyn_temp)
+        # Step 1: Get active tools FIRST (cheap — dict lookup)
+        # Include tools_state in cache key so module toggle invalidates cache
+        tools = get_active_tools()
+        tools_state = ""
+        if tools:
+            tool_names = [d["name"] for d in tools[0].get("functionDeclarations", [])]
+            tools_state = ",".join(sorted(tool_names))
+            logger.info("[Gemini] Active tools: %s", tools_state)
+        else:
+            logger.debug("[Gemini] No semantic tools active (pure text mode)")
+
+        cache_key = self._make_cache_key(history, user_context, dyn_temp, tools_state)
         cached = await self._get_cached(cache_key)
         if cached:
             return cached
 
-        # Build request payload
-        payload = await self._build_payload(history, dyn_temp, user_context)
+        # Step 2: Deterministic URL detection
+        last_msg = ""
+        if history and history[-1].get("role") == "user":
+            last_msg = self._extract_text_from_message(history[-1])
 
-        # Try all API keys with retry logic
-        attempts = 0
-        max_attempts = len(self.api_keys) * 2  # Try each key twice
-        
-        while attempts < max_attempts:
-            success, response = await self._make_api_request(payload, attempts)
-            
-            if success:
-                # Got a response (either valid or error)
-                if response:
-                    await self._set_cached(cache_key, response)
-                return response or "[Gemini] Response kosong."
-            
-            # Failed - rotate to next key
-            await self._rotate_to_next_key()
-            attempts += 1
+        url_context = await self._detect_and_fetch_url_context(last_msg)
+        if url_context:
+            logger.info("[Gemini] URL context detected (%d chars)", len(url_context))
 
-        # All keys failed
-        await _increase_503_counter()
-        logger.error("[Gemini] Semua API key gagal setelah semua attempts")
-        return "[Gemini] Semua API key gagal, silakan coba lagi nanti."
+        # Step 3: Build payload
+        payload = await self._build_payload(
+            history, dyn_temp, user_context,
+            url_context=url_context,
+            tools=tools,
+        )
+
+        # Step 4: Turn 1
+        logger.debug("[Gemini] Turn 1: sending to API...")
+        turn1 = await self._try_all_keys(payload)
+        if not turn1:
+            return "[Gemini] Semua API key gagal, silakan coba lagi nanti."
+
+        # Step 5: Check response type
+        if turn1["type"] == "text":
+            logger.info("[Gemini] Turn 1 → text (single call, no tool needed)")
+            text = turn1.get("text", "")
+            if text:
+                await self._set_cached(cache_key, text)
+            return text or "[Gemini] Response kosong."
+
+        # Step 6: Function call — execute tool
+        if turn1["type"] == "functionCall":
+            fc_name = turn1.get("name", "")
+            fc_args = turn1.get("args", {})
+            logger.info("[Gemini] Turn 1 → functionCall: %s(%s)", fc_name, fc_args)
+
+            if self._tool_executor is None:
+                self._tool_executor = ToolExecutor(self)
+
+            function_response = await self._tool_executor.execute({
+                "name": fc_name,
+                "args": fc_args,
+            })
+
+            # Step 7: Turn 2
+            turn2_payload = self._build_turn2_payload(
+                payload,
+                {"name": fc_name, "args": fc_args},
+                function_response,
+            )
+
+            turn2 = await self._try_all_keys(turn2_payload)
+
+            if turn2 and turn2["type"] == "text":
+                text = turn2.get("text", "")
+                logger.info("[Gemini] Turn 2 → text (tool result processed)")
+                if text:
+                    await self._set_cached(cache_key, text)
+                return text or "[Gemini] Response kosong."
+
+            logger.warning("[Gemini] Turn 2 failed, using fallback")
+            return self._format_tool_fallback(
+                {"name": fc_name, "args": fc_args},
+                function_response,
+            )
+
+        return "[Gemini] Response tidak dikenali."
 
     # ------------------------------------------------------------------
     # Convenience async methods

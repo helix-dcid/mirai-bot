@@ -56,6 +56,26 @@ SQL_PATH   = _DATA_DIR / "wilayah.sql"
 DEFAULT_ADM4 = "31.71.03.1001"
 
 # ---------------------------------------------------------------------------
+# City ADM4 lookup — pre-computed from wilayah.db (488 kota/Kab → ADM4)
+# ---------------------------------------------------------------------------
+_CITY_ADM4_PATH = _DATA_DIR / "city_adm4.json"
+_CITY_ADM4: Dict[str, dict] = {}
+
+
+def _load_city_adm4() -> Dict[str, dict]:
+    """Load city_adm4.json into memory (called once)."""
+    global _CITY_ADM4
+    if _CITY_ADM4:
+        return _CITY_ADM4
+    if _CITY_ADM4_PATH.exists():
+        try:
+            _CITY_ADM4 = json.loads(_CITY_ADM4_PATH.read_text(encoding="utf-8"))
+            logger.info(f"[Cuaca] Loaded city_adm4.json: {len(_CITY_ADM4)} cities")
+        except Exception as e:
+            logger.error(f"[Cuaca] Failed to load city_adm4.json: {e}")
+    return _CITY_ADM4
+
+# ---------------------------------------------------------------------------
 # Fallback statis: kota besar + kode adm4 (desa/kelurahan pertama di kota itu)
 # Pakai ini agar kota populer langsung dapat tanpa query DB
 # ---------------------------------------------------------------------------
@@ -517,6 +537,21 @@ class BMKGClient:
             if f" {city} " in f" {q_upper} " or q_upper.startswith(f"{city} ") or q_upper.endswith(f" {city}"):
                 logger.debug(f"[Cuaca] Fallback fuzzy: {city} in {q_upper} → {code}")
                 return code
+
+        # 1.5) Cek city_adm4.json — 499 kota/kab pre-computed
+        city_db = _load_city_adm4()
+        if city_db:
+            # Exact match
+            if q_upper in city_db:
+                adm4 = city_db[q_upper]["adm4"]
+                logger.debug(f"[Cuaca] city_adm4 exact: {q_upper} → {adm4}")
+                return adm4
+            # Fuzzy: cek jika query mengandung nama kota sebagai kata
+            for city_name, info in city_db.items():
+                if f" {city_name} " in f" {q_upper} " or q_upper.startswith(f"{city_name} ") or q_upper.endswith(f" {city_name}"):
+                    adm4 = info["adm4"]
+                    logger.debug(f"[Cuaca] city_adm4 fuzzy: {city_name} in {q_upper} → {adm4}")
+                    return adm4
 
         # 2) Query DB
         await self._ensure_db()

@@ -323,6 +323,18 @@ class BrowserlessClient:
 
         payload = {
             "url": url,
+            "bestAttempt": True,
+            "gotoOptions": {
+                "waitUntil": "domcontentloaded",
+                "timeout": self.timeout * 1000,
+            },
+            "rejectResourceTypes": ["image", "font", "stylesheet", "media"],
+            "rejectRequestPattern": [
+                ".*google-analytics.*",
+                ".*googletagmanager.*",
+                ".*facebook\\.com/tr.*",
+                ".*doubleclick\\.net.*",
+            ],
         }
 
         timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -338,18 +350,24 @@ class BrowserlessClient:
                         html = await resp.text()
                         text = _clean_html(html, max_chars)
 
-                        if text:
+                        if text and len(text) > 100:
                             await self._set_cached(url, text)
                             logger.info(
                                 f"[WebScraper] Sukses: {url[:60]} "
                                 f"({len(text)} chars)"
                             )
                             return text
-                        else:
-                            logger.warning(
-                                f"[WebScraper] Tidak ada teks: {url[:60]}"
-                            )
-                            return None
+
+                        # Fallback: /content returned empty/short, try /scrape
+                        logger.info(
+                            f"[WebScraper] /content short ({len(text) if text else 0} chars), "
+                            f"fallback ke /scrape: {url[:60]}"
+                        )
+                        structured = await self._scrape_structured(url, max_chars)
+                        if structured:
+                            await self._set_cached(url, structured)
+                            return structured
+                        return text or None
 
                     elif resp.status == 402:
                         logger.error(
@@ -384,6 +402,149 @@ class BrowserlessClient:
         """
         pattern = r"https?://[^\s<>\"']+"
         return re.findall(pattern, text)
+
+    # ------------------------------------------------------------------
+    # Structured scrape fallback — /scrape endpoint
+    # ------------------------------------------------------------------
+
+    async def _scrape_structured(
+        self,
+        url: str,
+        max_chars: Optional[int] = None,
+    ) -> Optional[str]:
+        """
+        Fallback scraper menggunakan endpoint /scrape dengan CSS selectors.
+        Dipanggil ketika /content mengembalikan teks terlalu pendek (<100 chars).
+        """
+        if not self.enabled:
+            return None
+
+        max_chars = max_chars or self.max_chars
+        endpoint = f"{self.base_url}/scrape"
+        params = {"token": self.api_key} if self.api_key else {}
+
+        payload = {
+            "url": url,
+            "elements": [
+                {
+                    "selector": "article, .article-body, .entry-content, .post-content, main, .main-content",
+                    "timeout": 5000,
+                },
+                {
+                    "selector": "h1, .article-title, .entry-title, .post-title",
+                    "timeout": 3000,
+                },
+            ],
+            "bestAttempt": True,
+            "gotoOptions": {
+                "waitUntil": "domcontentloaded",
+                "timeout": self.timeout * 1000,
+            },
+            "rejectResourceTypes": ["image", "font", "stylesheet", "media"],
+            "setJavaScriptEnabled": True,
+        }
+
+        timeout = aiohttp.ClientTimeout(total=self.timeout + 5)
+
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    endpoint,
+                    params=params,
+                    json=payload,
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            f"[WebScraper] /scrape HTTP {resp.status}: {url[:60]}"
+                        )
+                        return None
+
+                    data = await resp.json()
+                    texts = []
+
+                    for item in data.get("data", []):
+                        for result in item.get("results", []):
+                            text = result.get("text", "").strip()
+                            if text and len(text) > 20:
+                                texts.append(text)
+
+                    if not texts:
+                        return None
+
+                    combined = "\n\n".join(texts)
+                    combined = re.sub(r"\s+", " ", combined).strip()
+
+                    if len(combined) > max_chars:
+                        combined = combined[:max_chars].rsplit(" ", 1)[0] + "..."
+
+                    logger.info(
+                        f"[WebScraper] /scrape OK: {url[:60]} ({len(combined)} chars)"
+                    )
+                    return combined
+
+        except Exception as e:
+            logger.warning(f"[WebScraper] /scrape failed: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Search via Browserless /search endpoint (SearXNG)
+    # ------------------------------------------------------------------
+
+    async def search_via_browserless(
+        self,
+        query: str,
+        max_results: int = 5,
+    ) -> Optional[dict]:
+        """
+        Search the web using Browserless /search endpoint (SearXNG).
+        Tertiary fallback when both Tavily and DuckDuckGo fail.
+        """
+        if not self.enabled:
+            return None
+
+        endpoint = f"{self.base_url}/search"
+        params = {"token": self.api_key} if self.api_key else {}
+        payload = {"query": query}
+
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    endpoint,
+                    params=params,
+                    json=payload,
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            f"[WebScraper] /search HTTP {resp.status}"
+                        )
+                        return None
+
+                    data = await resp.json()
+                    results = []
+                    for r in data if isinstance(data, list) else data.get("results", []):
+                        results.append({
+                            "title": r.get("title", ""),
+                            "url": r.get("url", r.get("link", "")),
+                            "content": r.get("content", r.get("snippet", "")),
+                        })
+
+                    if results:
+                        logger.info(
+                            f"[WebScraper] /search OK: '{query[:50]}' "
+                            f"({len(results)} results)"
+                        )
+                        return {
+                            "results": results[:max_results],
+                            "answer": "",
+                            "engine": "browserless",
+                        }
+                    return None
+
+        except Exception as e:
+            logger.warning(f"[WebScraper] /search failed: {e}")
+            return None
 
 
 # ---------------------------------------------------------------------------

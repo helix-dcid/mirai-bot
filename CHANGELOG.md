@@ -1,5 +1,34 @@
 # Changelog - Mirai Helix
 
+## [3.7.0] - 2026-06-19
+### ✨ Added
+- **Gemini Function Calling** (`ai/gemini.py`): Migrasi dari keyword-trigger ke **native function calling (tool calling)**. Gemini sekarang memutuskan sendiri kapan butuh data cuaca, pencarian web, atau berita — tanpa daftar kata kunci.
+  - **2-turn flow**: Turn 1 kirim pesan + tools → Gemini return `functionCall` → eksekusi tool → Turn 2 kirim hasil → Gemini generate jawaban final.
+  - **3 semantic tools** terdaftar: `get_weather` (BMKG), `search_web` (Tavily/DDG), `get_news` (RSS summary).
+  - **Deterministic URL detection**: URL (webpage + YouTube) tetap dideteksi via regex tanpa LLM round-trip — hemat 1 API call.
+  - Jika tidak butuh tool → single API call (same latency as before).
+- **Tool Definitions** (`ai/tool_definitions.py`): Deklarasi function calling tools untuk Gemini. Dynamic registration berdasarkan `ModuleManager` — hanya tools yang module-nya aktif yang dikirim ke Gemini.
+- **Tool Executor** (`ai/tool_executor.py`): Mapping `functionCall` → async Python implementation. Timeout 15 detik per tool, error handling graceful (error dikirim balik ke Gemini sebagai `functionResponse`).
+- **Browserless /scrape fallback** (`ai/web_scraper.py`): Jika `/content` mengembalikan teks <100 chars, fallback ke `/scrape` endpoint dengan CSS selectors untuk structured article extraction.
+- **Browserless /search fallback** (`ai/web_search.py`): Tertiary fallback chain: Tavily → DuckDuckGo → Browserless `/search` (SearXNG). `WebSearchClient.enabled` sekarang juga mengecek Browserless availability.
+
+### ⚡ Improved
+- **`ai/gemini.py` — Hapus keyword triggers**: `_get_weather_context()` dan `_get_search_context()` dihapus. Weather dan search sekarang di-handle oleh Gemini function calling — lebih akurat, tidak perlu maintain keyword list.
+- **`ai/gemini.py` — News on-demand**: `NEWS_SUMMARY` tidak lagi di-inject ke setiap prompt (hemat ~500-1000 token/pesan). News sekarang diakses via `get_news` tool hanya saat user memang tanya berita.
+- **`ai/web_scraper.py` — Enhanced /content payload**: Ditambahkan `rejectResourceTypes` (blokir image/font/stylesheet/media), `rejectRequestPattern` (blokir tracker), `bestAttempt`, dan `gotoOptions` — mengurangi bandwidth dan mempercepat response.
+- **`ai/gemini.py` — Refactor `_make_api_request()`**: Return type berubah dari `(bool, str)` ke `(bool, dict)` untuk mendeteksi `functionCall` vs text response.
+- **`ai/gemini.py` — `_build_payload()` disederhanakan**: Tidak ada lagi `asyncio.gather()` 4 context getter di setiap pesan. Payload sekarang hanya berisi system_prompt + time + url_context + user_context + tools[].
+
+### 🔧 Changed
+- **`ai/gemini.py`**: Import `intent_classifier`, `query_reformer`, `search_session_manager` dihapus (tidak lagi digunakan oleh GeminiClient). `IntentClassifier` tetap ada untuk `/search` command.
+- **`ai/gemini.py`**: `self.news_summary` dihapus dari `__init__`. News summary dibaca on-demand oleh `ToolExecutor._load_news_summary()`.
+- **`config.py`**: Ditambahkan `TOOL_EXECUTION_TIMEOUT` (15s) dan `FUNCTION_CALL_MAX_TURNS` (1).
+- **`ai/web_search.py`**: Fallback chain diperpanjang: Tavily → DuckDuckGo → Browserless `/search`.
+
+### 🧹 Cleanup
+- Hapus `_load_news_summary()` dan `NEWS_SUMMARY` module-level variable dari `ai/gemini.py`.
+- Hapus `NEWS_SUMMARY_PATH` import dari `ai/gemini.py` (dipindah ke `ai/tool_executor.py`).
+
 ## [3.6.0] - 2026-06-13
 ### ✨ Added
 - **Intent Classifier** (`ai/intent_classifier.py`): Klasifikasi niat user (search vs chat) menggunakan keyword matching yang diperluas + negative triggers.

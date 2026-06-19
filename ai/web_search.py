@@ -67,13 +67,18 @@ class WebSearchClient:
 
     @property
     def enabled(self) -> bool:
-        """Cek apakah search tersedia (Tavily key ATAU duckduckgo-search ter-install)."""
+        """Cek apakah search tersedia (Tavily key ATAU duckduckgo-search ATAU Browserless)."""
         if self.api_key:
             return True
         try:
             from duckduckgo_search import AsyncDDGS
             return True
         except ImportError:
+            pass
+        try:
+            from ai.web_scraper import BrowserlessClient
+            return BrowserlessClient().enabled
+        except Exception:
             return False
 
     async def close(self):
@@ -234,6 +239,25 @@ class WebSearchClient:
             return None
 
     # ------------------------------------------------------------------
+    # Browserless Fallback (SearXNG)
+    # ------------------------------------------------------------------
+
+    async def _search_browserless(self, query: str, max_results: int) -> Optional[dict]:
+        """Tertiary fallback: Browserless /search endpoint (SearXNG)."""
+        try:
+            from ai.web_scraper import BrowserlessClient
+            client = BrowserlessClient()
+            if not client.enabled:
+                return None
+            return await client.search_via_browserless(query, max_results)
+        except ImportError:
+            logger.error("[WebSearch] BrowserlessClient not available")
+            return None
+        except Exception as e:
+            logger.warning(f"[WebSearch] Browserless /search error: {e}")
+            return None
+
+    # ------------------------------------------------------------------
     # Public: search
     # ------------------------------------------------------------------
 
@@ -243,14 +267,14 @@ class WebSearchClient:
         max_results: Optional[int] = None,
     ) -> Optional[dict]:
         """
-        Cari di web. Tavily primary, DuckDuckGo fallback.
+        Cari di web. Tavily → DuckDuckGo → Browserless fallback chain.
 
         Args:
             query: Kata kunci pencarian
             max_results: Override max results (default dari config)
 
         Returns:
-            dict: {"results": [...], "answer": "...", "engine": "tavily"|"duckduckgo"}
+            dict: {"results": [...], "answer": "...", "engine": "tavily"|"duckduckgo"|"browserless"}
                   atau None
         """
         if not query or not query.strip():
@@ -273,6 +297,10 @@ class WebSearchClient:
         if data is None:
             logger.info("[WebSearch] Tavily gagal, fallback ke DuckDuckGo")
             data = await self._search_duckduckgo(query, effective_max)
+
+        if data is None:
+            logger.info("[WebSearch] DuckDuckGo gagal, fallback ke Browserless /search")
+            data = await self._search_browserless(query, effective_max)
 
         if data is None:
             return None

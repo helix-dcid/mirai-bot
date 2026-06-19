@@ -76,3 +76,7 @@ TAVILY_SEARCH_DEPTH = "basic"      # "basic" atau "advanced" (lebih lambat, lebi
 
 # ===== WEB SEARCH RATE LIMITER CONFIG =====
 WEB_SEARCH_COOLDOWN_DAYS = 7  # 1x scrap per user per N hari
+
+# ===== FUNCTION CALLING CONFIG =====
+TOOL_EXECUTION_TIMEOUT = 15  # Timeout per tool execution (detik)
+FUNCTION_CALL_MAX_TURNS = 1  # Max function call rounds (1 = single tool, no chaining)
