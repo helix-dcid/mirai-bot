@@ -5,10 +5,8 @@ import discord
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from utils.logger import setup_logging
-from core.module_manager import module_manager
 import tools.qwen_batch as qwen_batch
 import psutil
-import requests
 import aiohttp
 from config import RPC_UPDATE_INTERVAL, WEBHOOK_URL, ALERT_CHANNEL_ID
 
@@ -19,8 +17,6 @@ class SchedulerService:
     def __init__(self, bot, micro_rag):
         self.bot = bot
         self.micro_rag = micro_rag
-        self.modules_paused = False  # Track apakah modul sedang dipause
-        self.prev_module_status = {}
         self.rpc_statuses = [
             {"type": "playing", "text": "Mirai Health Assistant"},
             {"type": "watching", "text": "over Helix members"},
@@ -153,36 +149,21 @@ class SchedulerService:
                         except Exception as e:
                             logger.error(f"[Monitor] Gagal mengirim ke alert channel: {e}")
                 
-                # Handle high CPU - pause modules
-                if cpu >= 70 and not self.modules_paused:
-                    logger.warning("[Monitor] CPU >=70%%, menonaktifkan semua modul.")
-                    # Simpan status modul sebelum pause
-                    self.prev_module_status = {mod: module_manager.is_enabled(mod) for mod in module_manager.modules}
-                    for mod in module_manager.modules:
-                        module_manager.set_status(mod, False)
-                    self.modules_paused = True
-                    
-                    # Kirim embed peringatan ke channel jika diatur
-                    if ALERT_CHANNEL_ID:
+                # Kirim peringatan jika CPU tinggi (tanpa pause modules)
+                if cpu >= 70:
+                    logger.warning("[Monitor] CPU tinggi: %d%%", cpu)
+                    if ALERT_CHANNEL_ID and (current_time - last_webhook_time) >= webhook_cooldown:
                         try:
                             channel = self.bot.get_channel(ALERT_CHANNEL_ID)
                             if channel:
                                 embed = discord.Embed(
                                     title="⚠️ Peringatan CPU Tinggi",
-                                    description="Penggunaan CPU server meninggi! Semua fitur dihentikan sementara, harap bersabar.",
+                                    description=f"CPU: {cpu}% — Bot mungkin melambat.",
                                     color=0xFF0000
                                 )
                                 await channel.send(embed=embed)
                         except Exception as e:
-                            logger.error(f"[Monitor] Gagal mengirim embed peringatan: {e}")
-                
-                # Handle CPU recovery - resume modules
-                elif cpu < 50 and self.modules_paused:
-                    logger.info("[Monitor] CPU turun <50%%, mengaktifkan kembali modul.")
-                    for mod, was_enabled in self.prev_module_status.items():
-                        if was_enabled:
-                            module_manager.set_status(mod, True)
-                    self.modules_paused = False
+                            logger.error(f"[Monitor] Gagal kirim embed: {e}")
                     
                     # Kirim notifikasi recovery
                     if ALERT_CHANNEL_ID:

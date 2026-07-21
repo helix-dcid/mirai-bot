@@ -369,6 +369,20 @@ class MessageHandler:
                 asyncio.create_task(self._delete_after_delay(msg))
                 return
 
+            # STEP 5.5: Cek CPU tinggi — kasih tahu user tanpa hit Gemini
+            try:
+                import psutil
+                cpu_pct = psutil.cpu_percent(interval=0.5)
+                if cpu_pct >= 70:
+                    await message.reply(
+                        f"⚠️ **Server lagi sibuk nih...** CPU lagi di **{cpu_pct:.0f}%**. "
+                        "Mirai istirahat dulu ya, coba lagi beberapa saat lagi! 😌"
+                    )
+                    self.cooldown.mark_replied(channel_id)
+                    return
+            except Exception:
+                pass
+
             # STEP 6: Generate reply dengan context yang benar
             reply = ""
             async with message.channel.typing():
