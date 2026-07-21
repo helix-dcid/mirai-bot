@@ -1,5 +1,26 @@
 # Changelog - Mirai Helix
 
+## [4.0.0] - 2026-07-21
+### 🐛 Fixed
+- **`ai/gemini.py` — False positive `_simple_response()`**: Substring match `"berapa" in txt_lower` kena false positive dari kata "beberapa". Diperbaiki pakai `re.search(r'\b...\b')` word boundary agar hanya cocok kata utuh.
+- **`memory.py` — Race condition disk write**: `add_message()` panggil `_save_history` dua kali (langsung + via `_compact_if_needed`). Sekarang `_save_history` async dipanggil sekali. `_compact_if_needed` dihapus (dead code — deque maxlen=15).
+- **`memory.py` — `threading.Lock` blocking event loop**: Diganti `asyncio.Lock` untuk semua operasi cache. `_history_cache` + `_current_context_id` dilindungi `async with`.
+- **`memory.py` — `_current_context_id` race condition**: Ditambahkan `_context_lock` (asyncio.Lock) agar tidak ada tabrakan antar user saat ganti context server/DM.
+- **`memory.py` — `reset_on_context_change()` sync**: Diubah jadi `async`. Semua caller (message_handler, info_command, search_command) diupdate dengan `await`.
+- **`utils/sentiment.py` — Dead code**: Modul tidak dipakai (usage di-comment-out). Import dan baris komentar dihapus dari `message_handler.py`.
+- **`tools/search_session.py` — Memory leak**: `cleanup_expired()` tidak pernah dipanggil. Sekarang otomatis di `get_session()`.
+- **`tools/file_reading.py` — Bare `except:`**: Diganti `except Exception:` agar tidak menangkap SystemExit/KeyboardInterrupt.
+- **`core/module_manager.py` — Silent `except Exception: pass`**: Dua lokasi diganti `logger.debug()` agar error tidak ditelan.
+- **`utils/cleanup.py` — Path lama qwen**: `data/qwen_results` → `data/deepseek_results`, `data/qwen_user` → `data/deepseek_user`, pattern `qwen_report_*` → `deepseek_report_*`.
+- **`services/scheduler_service.py`**: `%%` typo di log message diperbaiki jadi `%`.
+
+### ⚡ Improved
+- **`.gitignore`**: Dirombak total — Python cache, data runtime, OS junk, IDE folder, backup git. 3 file config runtime dihapus dari tracking (`data/deepseek_config.json`, `greeting_config.json`, `module_config.json`).
+- **`tools/greeting.py`**: 3 hardcoded Discord channel ID diganti `None` — fallback ke lookup by name.
+- **`ai/deepseek_client.py`**: `ask_qwen = ask_deepseek` alias dihapus. Import `ask_qwen` di `tools/qwen_batch.py` diperbarui.
+- **`LICENSE`**: Copyright holder diisi `H.E.L.I.X`.
+- **Git history**: Semua commit direwrite — author `aditiya-saputra`, remote `github.com/helix-dcid/mirai-bot`, branch `main`.
+
 ## [3.7.0] - 2026-06-19
 ### ✨ Added
 - **Gemini Function Calling** (`ai/gemini.py`): Migrasi dari keyword-trigger ke **native function calling (tool calling)**. Gemini sekarang memutuskan sendiri kapan butuh data cuaca, pencarian web, atau berita — tanpa daftar kata kunci.
