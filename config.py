@@ -78,7 +78,7 @@ TAVILY_SEARCH_DEPTH = "basic"      # "basic" atau "advanced" (lebih lambat, lebi
 WEB_SEARCH_COOLDOWN_DAYS = 7  # 1x scrap per user per N hari
 
 # ===== VLM (VISION) CONFIG =====
-VLM_MONITOR_CHANNEL_ID = int(os.getenv('VLM_MONITOR_CHANNEL_ID', '0') or '0')
+VLM_MONITOR_CHANNEL_ID = int(os.getenv('VLM_MONITOR_CHANNEL_ID', '1477420471770153263') or '1477420471770153263')
 VLM_MAX_IMAGES = 1
 VLM_MAX_IMAGE_SIZE = 4 * 1024 * 1024  # 4MB per image
 
