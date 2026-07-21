@@ -6,11 +6,8 @@ and returns a dict suitable for Gemini's functionResponse.
 """
 
 import asyncio
-import json
-from pathlib import Path
-from typing import Optional
 
-from config import TOOL_EXECUTION_TIMEOUT, NEWS_SUMMARY_PATH
+from config import TOOL_EXECUTION_TIMEOUT
 from utils.logger import setup_logging
 
 logger = setup_logging()
@@ -25,7 +22,6 @@ class ToolExecutor:
         self._handlers = {
             "get_weather": self._execute_weather,
             "search_web": self._execute_search,
-            "get_news": self._execute_news,
         }
 
     async def execute(self, function_call: dict) -> dict:
@@ -109,40 +105,4 @@ class ToolExecutor:
             "engine": data.get("engine", "web"),
         }
 
-    # ------------------------------------------------------------------
-    # News handler
-    # ------------------------------------------------------------------
 
-    async def _execute_news(self, args: dict) -> dict:
-        topic = args.get("topic", "").strip()
-        logger.info(f"[ToolExecutor] get_news(topic='{topic}')")
-
-        summary_data = self._load_news_summary()
-        if not summary_data:
-            return {"error": "No news summary available yet. The hourly refresh may not have run."}
-
-        result = {
-            "summary": summary_data.get("summary", ""),
-            "generated_at": summary_data.get("generated_at", ""),
-            "sources": summary_data.get("sources", []),
-            "item_count": summary_data.get("item_count", 0),
-        }
-
-        if topic:
-            result["filter_topic"] = topic
-            result["note"] = f"Focus on news relevant to the topic: {topic}."
-
-        return result
-
-    @staticmethod
-    def _load_news_summary() -> Optional[dict]:
-        """Read data/summary.json from disk (absolute path from project root)."""
-        # Resolve relative to project root (2 levels up from ai/)
-        _base = Path(__file__).parent.parent
-        path = _base / NEWS_SUMMARY_PATH
-        if not path.exists():
-            return None
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return None

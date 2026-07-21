@@ -35,7 +35,6 @@ class ModuleCommands(BaseCommand):
             modul=[
                 app_commands.Choice(name="Calculator", value="calculator"),
                 app_commands.Choice(name="Weather", value="weather"),
-                app_commands.Choice(name="News", value="news"),
                 app_commands.Choice(name="Greeting", value="greeting"),
                 app_commands.Choice(name="Wellness", value="wellness"),
                 app_commands.Choice(name="DeepSeek", value="deepseek"),

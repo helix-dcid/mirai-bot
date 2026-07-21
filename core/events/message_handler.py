@@ -13,8 +13,16 @@ from utils.wellness import get_wellness_reminder, should_give_reminder
 from utils.identity import resolve_name, clean_name, build_user_context
 from tools.file_reading import build_attachment_context
 import tools.qwen_batch as qwen_batch
-from config import COOLDOWN_REPLY_DELAY, VLM_MONITOR_CHANNEL_ID, VLM_MAX_IMAGES, VLM_MAX_IMAGE_SIZE
+from config import (
+    COOLDOWN_REPLY_DELAY, VLM_MONITOR_CHANNEL_ID, VLM_MAX_IMAGES, VLM_MAX_IMAGE_SIZE,
+    COMPACTION_THRESHOLD,
+)
 from core.module_manager import module_manager
+from memory import (
+    is_compacting, acquire_compaction_lock, release_compaction_lock,
+    get_compacted_context, clear_history, get_history_length, set_compacted_context,
+)
+from tools.context_compactor import ContextCompactor
 
 logger = setup_logging()
 WIB = ZoneInfo("Asia/Jakarta")
@@ -27,6 +35,7 @@ class MessageHandler:
         self.cooldown = cooldown_manager
         self.micro_rag = micro_rag  # Micro-RAG untuk profiling user
         self.web_rate_limiter = web_rate_limiter  # Web scraping rate limiter
+        self.compactor = ContextCompactor()  # Context compactor via Groq
 
     def clean_message(self, content):
         """Bersihkan pesan dari mention bot."""
@@ -318,6 +327,23 @@ class MessageHandler:
             if not should_reply:
                 return
 
+            # STEP 4A: Context Compaction Check
+            # Jika sedang dalam proses kompaksi, blokir request baru
+            if is_compacting():
+                msg = await message.reply(
+                    "⏳ **Mirai sedang merangkum percakapan...**\n"
+                    "Tunggu bentar ya, masih nulis catatan. Coba lagi beberapa detik lagi! 📝"
+                )
+                asyncio.create_task(self._delete_after_delay(msg, delay_seconds=10))
+                return
+
+            # Jika history sudah penuh dan compactor aktif, trigger kompaksi
+            hist_len = get_history_length()
+            if hist_len >= COMPACTION_THRESHOLD and self.compactor.enabled:
+                acquired = acquire_compaction_lock()
+                if acquired:
+                    asyncio.create_task(self._run_compaction(message.channel))
+
             # STEP 4.5: Cek rate limit web scraper (1x per-user per minggu)
             if has_url and self.web_rate_limiter is not None:
                 if module_manager.is_enabled("web_scraper"):
@@ -368,6 +394,17 @@ class MessageHandler:
                 
                 # Ambil konteks Micro-RAG (profil user jangka panjang)
                 rag_context = self.micro_rag.get_user_context(user_id)
+                
+                # Inject compacted context percakapan (ringkasan sebelumnya)
+                compacted_context = get_compacted_context()
+                if compacted_context:
+                    compacted_block = (
+                        f"\n\n[KOMPAKSI PERCAKAPAN SEBELUMNYA]\n{compacted_context}"
+                    )
+                    if rag_context:
+                        rag_context = compacted_block + "\n" + rag_context
+                    else:
+                        rag_context = compacted_block
                 
                 # Build context untuk AI
                 is_dm = message.guild is None
@@ -434,6 +471,55 @@ class MessageHandler:
 
         except Exception as e:
             logger.exception("Error in on_message: %s", e)
+
+    # ========== CONTEXT COMPACTION ==========
+
+    async def _run_compaction(self, channel):
+        """Lakukan kompaksi history percakapan via Groq di background."""
+        try:
+            logger.info("[Compactor] Memulai kompaksi history percakapan...")
+
+            notif = await channel.send(
+                "📝 **Mirai sedang merangkum percakapan kita...**\n"
+                "Mohon tunggu sebentar ya, biar Mirai bisa ingat terus tanpa kehabisan memori! ⏳"
+            )
+
+            from memory import get_history, trim_front_messages
+
+            history = get_history()
+            original_count = len(history)
+            existing = get_compacted_context()
+            summary = await self.compactor.compact(history, existing_context=existing)
+
+            if summary:
+                set_compacted_context(summary)
+
+                trim_front_messages(original_count)
+
+                logger.info(f"[Compactor] Kompaksi selesai ({len(summary)} chars, {original_count} pesan dikompak).")
+
+                await notif.edit(
+                    content="✅ **Selesai merangkum!** "
+                    "Percakapan sebelumnya sudah diringkas biar Mirai tetap ingat. "
+                    "Silakan lanjutkan ngobrolnya ya ☺️"
+                )
+            else:
+                logger.warning("[Compactor] Kompaksi gagal menghasilkan ringkasan.")
+                await notif.edit(
+                    content="⚠️ **Maaf, gagal merangkum.** Tapi Mirai akan tetap lanjut seperti biasa ya!"
+                )
+
+        except Exception as e:
+            logger.exception(f"[Compactor] Error saat kompaksi: {e}")
+            try:
+                await channel.send(
+                    "⚠️ **Ada gangguan saat merangkum.** Tapi tenang, Mirai masih bisa lanjut ngobrol kok!"
+                )
+            except Exception:
+                pass
+
+        finally:
+            release_compaction_lock()
 
     async def _delete_after_delay(self, msg: discord.Message, delay_seconds: int = COOLDOWN_REPLY_DELAY):
         await asyncio.sleep(delay_seconds)

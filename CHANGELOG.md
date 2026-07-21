@@ -1,5 +1,17 @@
 # Changelog - Mirai Helix
 
+## [4.1.0] - 2026-07-21
+### ✨ Added
+- **Context Compaction** — Riwayat percakapan otomatis diringkas via Groq saat mencapai 15 pesan. Sistem kompaksi multi-level: ringkasan baru menggabungkan ringkasan lama + percakapan baru. Ringkasan disimpan ke `data/compacted_context.json` dan disuntikkan ke konteks Gemini. Request lain diblokir selama proses kompaksi. (`tools/context_compactor.py`, `memory.py`, `message_handler.py`)
+
+### 🔧 Changed
+- **Module Manager**: Modul `news` dihapus dari daftar modul (9 → 8 module). (`core/module_manager.py`)
+- **Slash Commands**: Pilihan `News` dihapus dari `/module toggle`. (`commands/module_command.py`)
+
+### 🧹 Cleanup
+- **Hapus sistem news_summary**: File `ai/news_summary.py` dihapus. Tool `get_news` dihapus dari `TOOL_DECLARATIONS` dan `MODULE_TO_TOOL`. Method `_execute_news` dan `_load_news_summary` dihapus dari `ToolExecutor`. Scheduler `schedule_news_summary` dan import `run_summary` dihapus. 6 konstanta `NEWS_*` dihapus dari `config.py`. File data `summary.json` dan `berita.json` dibersihkan.
+- **`README.md`**: Diperbarui — fitur news dihapus, context compaction ditambahkan, struktur direktori diperbarui.
+
 ## [4.0.0] - 2026-07-21
 ### 🐛 Fixed
 - **`ai/gemini.py` — False positive `_simple_response()`**: Substring match `"berapa" in txt_lower` kena false positive dari kata "beberapa". Diperbaiki pakai `re.search(r'\b...\b')` word boundary agar hanya cocok kata utuh.

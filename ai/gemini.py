@@ -2,7 +2,7 @@
 """Klien async untuk Google Gemini dengan Function Calling.
 
 Fitur utama:
-- Gemini native function calling (tool calling) untuk weather, search, news
+- Gemini native function calling (tool calling) untuk weather, search
 - Deterministic URL detection (webpage + YouTube) tanpa LLM
 - 2-turn flow: Turn 1 → functionCall detection → execute → Turn 2
 - Semaphore (max 3 concurrent requests)
@@ -127,7 +127,7 @@ class GeminiClient:
         self._KEY_COOLDOWN = {}
         self._cache_lock = asyncio.Lock()
         logger.info(f"[Gemini] Initialized with {len(self.api_keys)} API key(s)")
-        logger.info("[Gemini] Function calling mode: active (weather, search, news via tool calling)")
+        logger.info("[Gemini] Function calling mode: active (weather, search via tool calling)")
 
     # ------------------------------------------------------------------
     # Cache helpers

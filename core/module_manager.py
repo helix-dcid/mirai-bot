@@ -3,7 +3,7 @@
 Modul untuk mengelola status aktif/nonaktif dari berbagai fitur Mirai.
 
 Fitur:
-- Enable/disable modul seperti calculator, weather, news, greeting, qwen, wellness
+- Enable/disable modul seperti calculator, weather, greeting, deepseek, wellness
 - Konfigurasi disimpan di data/module_config.json
 - Dapat diakses dari command /module
 """
@@ -29,7 +29,7 @@ class ModuleManager:
             _cache_mtime: timestamp modifikasi file terakhir yang sudah di-cache.
         """
         self._ensure_config_exists()
-        self.modules = ["calculator", "weather", "news", "greeting", "deepseek", "wellness", "web_scraper", "youtube_transcript", "search"]
+        self.modules = ["calculator", "weather", "greeting", "deepseek", "wellness", "web_scraper", "youtube_transcript", "search"]
         # Cache — baca disk hanya jika file berubah
         self._config_cache: dict = {}
         self._cache_mtime: float = 0.0
@@ -49,7 +49,6 @@ class ModuleManager:
             default_config = {
                 "calculator": True,
                 "weather": True,
-                "news": True,
                 "greeting": True,
                 "deepseek": True,
                 "wellness": True,

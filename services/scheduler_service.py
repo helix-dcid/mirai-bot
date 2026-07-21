@@ -5,13 +5,12 @@ import discord
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from utils.logger import setup_logging
-from ai.news_summary import run_summary
 from core.module_manager import module_manager
 import tools.qwen_batch as qwen_batch
 import psutil
 import requests
 import aiohttp
-from config import RPC_UPDATE_INTERVAL, NEWS_REFRESH_SECONDS, WEBHOOK_URL, ALERT_CHANNEL_ID
+from config import RPC_UPDATE_INTERVAL, WEBHOOK_URL, ALERT_CHANNEL_ID
 
 logger = setup_logging()
 WIB = ZoneInfo("Asia/Jakarta")
@@ -45,7 +44,6 @@ class SchedulerService:
 
     async def start_all(self):
         asyncio.create_task(self.update_presence())
-        asyncio.create_task(self.schedule_news_summary())
         asyncio.create_task(self.schedule_micro_rag())
         asyncio.create_task(self.monitor_resources())
         asyncio.create_task(self._start_qwen_batch())
@@ -70,22 +68,6 @@ class SchedulerService:
             except Exception as err:
                 logger.exception("[Scheduler] Error updating presence: %s", err)
             await asyncio.sleep(RPC_UPDATE_INTERVAL)
-
-    async def schedule_news_summary(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            if module_manager.is_enabled("news"):
-                try:
-                    # FIXED: Added timeout to prevent hanging
-                    await asyncio.wait_for(
-                        asyncio.to_thread(run_summary),
-                        timeout=300  # 5 minutes max
-                    )
-                except asyncio.TimeoutError:
-                    logger.error("[NEWS] Timeout saat menjalankan ringkasan berita")
-                except Exception as err:
-                    logger.exception("[NEWS] Gagal menjalankan ringkasan: %s", err)
-            await asyncio.sleep(NEWS_REFRESH_SECONDS)
 
     async def schedule_micro_rag(self):
         await self.bot.wait_until_ready()

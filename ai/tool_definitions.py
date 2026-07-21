@@ -6,7 +6,6 @@ Hanya tools yang module-nya aktif yang dikirim ke Gemini.
 Tools yang didaftarkan (semantic — butuh LLM routing):
   - get_weather: BMKG weather data
   - search_web: Tavily / DuckDuckGo web search
-  - get_news: RSS news summary
 
 Tools yang TIDAK didaftarkan (deterministic — regex detection):
   - scrape_webpage: URL terdeteksi → Browserless scrape
@@ -68,37 +67,11 @@ TOOL_DECLARATIONS = {
             "required": ["query"],
         },
     },
-    "get_news": {
-        "name": "get_news",
-        "description": (
-            "Get the latest Indonesian news summary, refreshed hourly from "
-            "10 major media sources (Antara, Tempo, CNN Indonesia, Republika, "
-            "Tribunnews, BBC Indonesia, etc.). "
-            "Use this when the user asks about latest news, current events, "
-            "what's happening in Indonesia, or when news context is relevant. "
-            "Optionally filter by topic."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "topic": {
-                    "type": "string",
-                    "description": (
-                        "Optional topic to filter news by, e.g. 'kesehatan', "
-                        "'politik', 'ekonomi', 'teknologi'. Omit or use empty "
-                        "string for general news."
-                    ),
-                }
-            },
-            "required": [],
-        },
-    },
 }
 
 MODULE_TO_TOOL = {
     "weather": "get_weather",
     "search": "search_web",
-    "news": "get_news",
 }
 
 

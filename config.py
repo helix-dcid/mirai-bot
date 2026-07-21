@@ -40,18 +40,9 @@ RPC_UPDATE_INTERVAL = 1800  # Update presence setiap 30 menit (detik)
 MAX_KEY_WAIT = 120  # Maksimal tunggu semua key cooldown (detik)
 KEY_COOLDOWN_DURATION = 60  # Durasi cooldown per key saat rate limit (detik)
 
-# ===== NEWS SUMMARY CONFIG =====
-
-# Webhook URL untuk monitoring sistem (opsional)
-# Channel ID untuk mengirim embed peringatan CPU tinggi (opsional)
+# ===== WEBHOOK & MONITORING =====
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', '')
 ALERT_CHANNEL_ID = int(os.getenv('ALERT_CHANNEL_ID', '0') or '0')
-NEWS_SOURCE_URL = "https://raw.githubusercontent.com/harukayuka2/news-mirai/main/data/berita.json"
-NEWS_JSON_PATH = "data/berita.json"
-NEWS_SUMMARY_PATH = "data/summary.json"
-NEWS_REFRESH_SECONDS = 3600  # Refresh berita dan summary setiap 1 jam
-NEWS_MAX_ITEMS = 30  # Batasi jumlah berita yang dirangkum
-NEWS_MAX_CHARS = 12000  # Batasi total karakter berita yang dikirim ke AI
 
 # ===== WEB SCRAPER (BROWSERLESS) CONFIG =====
 BROWSERLESS_API_KEY = os.getenv('BROWSERLESS_API_KEY', '')
@@ -85,3 +76,9 @@ VLM_MAX_IMAGE_SIZE = 4 * 1024 * 1024  # 4MB per image
 # ===== FUNCTION CALLING CONFIG =====
 TOOL_EXECUTION_TIMEOUT = 15  # Timeout per tool execution (detik)
 FUNCTION_CALL_MAX_TURNS = 1  # Max function call rounds (1 = single tool, no chaining)
+
+# ===== CONTEXT COMPACTION CONFIG =====
+COMPACTION_THRESHOLD = 15  # Jumlah pesan sebelum kompaksi otomatis
+COMPACTION_MODEL = "llama-3.1-8b-instant"  # Model Groq untuk kompaksi
+COMPACTION_MAX_CHARS = 4000  # Maks karakter hasil kompaksi
+COMPACTION_CONTEXT_FILE = "data/compacted_context.json"  # File penyimpanan compacted context
