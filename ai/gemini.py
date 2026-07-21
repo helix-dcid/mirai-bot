@@ -25,7 +25,7 @@ from typing import List, Dict, Optional, Tuple
 from ai.time import get_wib_time, get_wib_time_str
 from ai.cuaca import BMKGClient
 from ai.web_scraper import BrowserlessClient
-from ai.youtube_transcript import YouTubeTranscriptClient
+from ai.youtube_transcript import YouTubeTranscriptClient, YOUTUBE_URL_PATTERN
 from ai.web_search import WebSearchClient
 from core.module_manager import module_manager
 from ai.tool_definitions import get_active_tools
@@ -290,6 +290,10 @@ class GeminiClient:
         Regex-detect webpage URLs and fetch context deterministically.
         YouTube transcript is now handled via function calling, not pre-fetch.
         """
+        # Skip YouTube URLs — handled via function calling
+        if YOUTUBE_URL_PATTERN.search(user_message):
+            return ""
+
         if module_manager.is_enabled("web_scraper"):
             web_ctx = await self._get_webpage_context(user_message)
             if web_ctx:
