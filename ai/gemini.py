@@ -13,6 +13,7 @@ Fitur utama:
 """
 
 import os
+import re
 import json
 import copy
 import time
@@ -208,8 +209,24 @@ class GeminiClient:
         """Extract text content from message dict."""
         if "parts" in msg and isinstance(msg["parts"], list) and msg["parts"]:
             part = msg["parts"][0]
-            return part.get("text", "") if isinstance(part, dict) else str(part)
+            raw = part.get("text", "") if isinstance(part, dict) else str(part)
+            return raw
         return msg.get("content", "")
+
+    def _extract_user_message_only(self, raw: str) -> str:
+        """Extract just the 'Message: ' portion from wrapped metadata message.
+        
+        handle() wraps messages with metadata (nama, channel, dll).
+        URL/keyword detection needs to run on the actual user message only.
+        Stops at attachment section if present.
+        """
+        match = re.search(r"^Message:\s*(.*?)(?:\n\n\[|\Z)", raw, re.MULTILINE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        match = re.search(r"^Message:\s*(.*)", raw, re.MULTILINE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return raw
 
     # ------------------------------------------------------------------
     # Dynamic temperature
@@ -238,8 +255,9 @@ class GeminiClient:
         if not self.web_scraper.enabled:
             return ""
 
-        # Ekstrak URL dari pesan
-        urls = self.web_scraper.extract_urls(user_message)
+        # Ekstrak URL dari pesan (pakai clean message, buang metadata wrapper)
+        clean_msg = self._extract_user_message_only(user_message)
+        urls = self.web_scraper.extract_urls(clean_msg)
         if not urls:
             return ""
 
@@ -283,14 +301,15 @@ class GeminiClient:
         if not module_manager.is_enabled("youtube_transcript"):
             return ""
         
-        # Ekstrak URL YouTube dari pesan
-        urls = self.youtube_transcript.extract_urls(user_message)
+        # Pakai clean message (buang metadata wrapper dari handle())
+        clean_msg = self._extract_user_message_only(user_message)
+        urls = self.youtube_transcript.extract_urls(clean_msg)
         if not urls:
             return ""
         
         # Keyword detection: hanya inject jika user bertanya tentang video
         # Cegah token waste untuk casual share link
-        msg_lower = user_message.lower()
+        msg_lower = clean_msg.lower()
         video_keywords = [
             "apa", "tentang", "isi", "kata", "bicarakan", "jelaskan",
             "ringkas", "transkrip", "subtitle", "teks", "terjemahkan",
