@@ -23,6 +23,7 @@ from memory import (
     get_compacted_context, clear_history, get_history_length, set_compacted_context,
 )
 from tools.context_compactor import ContextCompactor
+from ai.youtube_transcript import YOUTUBE_URL_PATTERN
 
 logger = setup_logging()
 WIB = ZoneInfo("Asia/Jakarta")
@@ -345,7 +346,8 @@ class MessageHandler:
                     asyncio.create_task(self._run_compaction(message.channel))
 
             # STEP 4.5: Cek rate limit web scraper (1x per-user per minggu)
-            if has_url and self.web_rate_limiter is not None:
+            is_youtube = bool(YOUTUBE_URL_PATTERN.search(cleaned)) if has_url else False
+            if has_url and self.web_rate_limiter is not None and not is_youtube:
                 if module_manager.is_enabled("web_scraper"):
                     if not self.web_rate_limiter.can_scrape(user_id):
                         sisa_hari = self.web_rate_limiter.get_remaining_days(user_id)
@@ -440,7 +442,7 @@ class MessageHandler:
                 reply = await self.ai.generate_reply(history, user_context=user_context)
 
                 # STEP 6.5: Catat web scraping sukses (setelah Gemini reply)
-                if has_url and self.web_rate_limiter is not None:
+                if has_url and self.web_rate_limiter is not None and not is_youtube:
                     if module_manager.is_enabled("web_scraper"):
                         from ai.web_scraper import BrowserlessClient
                         scraper = BrowserlessClient()
