@@ -1,6 +1,6 @@
 import asyncio
 from ai.gemini import GeminiClient
-from memory import add_message, get_history
+from memory import add_message, add_message_parts, get_history
 
 class AIService:
     def __init__(self):
@@ -19,6 +19,10 @@ class AIService:
     async def add_to_history(self, role, content):
         """Add message to conversation history."""
         await add_message(role, content)
+
+    async def add_to_history_parts(self, role, parts):
+        """Add multi-part message (teks + gambar) ke history."""
+        await add_message_parts(role, parts)
 
     def get_history(self):
         """Retrieve conversation history."""

@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import io
 import math
 import json
 import re
@@ -7,12 +9,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from utils.logger import setup_logging
-from utils.sentiment import analyze_sentiment, get_mood_emoji
 from utils.wellness import get_wellness_reminder, should_give_reminder
 from utils.identity import resolve_name, clean_name, build_user_context
 from tools.file_reading import build_attachment_context
 import tools.qwen_batch as qwen_batch
-from config import COOLDOWN_REPLY_DELAY
+from config import COOLDOWN_REPLY_DELAY, VLM_MONITOR_CHANNEL_ID, VLM_MAX_IMAGES, VLM_MAX_IMAGE_SIZE
 from core.module_manager import module_manager
 
 logger = setup_logging()
@@ -53,7 +54,92 @@ class MessageHandler:
         return name, role_name
 
     # ========== HELPER FUNCTIONS (Pisah dari main logic) ==========
-    
+
+    IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+    EXT_TO_MIME = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    }
+
+    async def _get_image_parts(self, attachments: list) -> tuple:
+        """
+        Download image attachments untuk VLM.
+        Returns (gemini_parts, raw_images):
+          - gemini_parts: list inline_data untuk Gemini API
+          - raw_images: list (filename, bytes) untuk monitoring channel
+        """
+        gemini_parts = []
+        raw_images = []
+        if not attachments:
+            return gemini_parts, raw_images
+
+        count = 0
+        for attachment in attachments:
+            if count >= VLM_MAX_IMAGES:
+                break
+
+            ext = Path(attachment.filename).suffix.lower()
+            if ext not in self.IMAGE_EXTENSIONS:
+                continue
+
+            if attachment.size > VLM_MAX_IMAGE_SIZE:
+                logger.warning(f"[VLM] {attachment.filename} terlalu besar ({attachment.size} bytes), skip")
+                continue
+
+            content_type = attachment.content_type or ""
+            if not content_type.startswith("image/"):
+                content_type = self.EXT_TO_MIME.get(ext, "")
+                if not content_type:
+                    continue
+
+            try:
+                image_bytes = await attachment.read()
+                b64 = base64.b64encode(image_bytes).decode("utf-8")
+                gemini_parts.append({
+                    "inline_data": {
+                        "mime_type": content_type,
+                        "data": b64,
+                    }
+                })
+                raw_images.append((attachment.filename, image_bytes))
+                count += 1
+                logger.info(f"[VLM] Image attached: {attachment.filename} ({len(image_bytes)} bytes)")
+            except Exception as e:
+                logger.warning(f"[VLM] Gagal proses {attachment.filename}: {e}")
+
+        return gemini_parts, raw_images
+
+    async def _forward_to_monitor_channel(
+        self,
+        original_msg: discord.Message,
+        cleaned_text: str,
+        reply: str,
+        raw_images: list,
+    ):
+        """Forward VLM request (user message + image + AI response) ke monitoring channel."""
+        channel = self.bot.get_channel(VLM_MONITOR_CHANNEL_ID)
+        if not channel:
+            logger.warning(f"[VLM] Monitoring channel {VLM_MONITOR_CHANNEL_ID} tidak ditemukan")
+            return
+
+        try:
+            embed = discord.Embed(
+                title="📸 VLM Request",
+                color=discord.Color.purple(),
+                timestamp=original_msg.created_at,
+            )
+            embed.add_field(name="User", value=f"{original_msg.author.mention} (`{original_msg.author.id}`)", inline=False)
+            embed.add_field(name="Channel", value=original_msg.channel.mention, inline=False)
+            embed.add_field(name="Message", value=cleaned_text or "*[gambar saja]*", inline=False)
+            embed.add_field(name="Response", value=reply[:1500] + "..." if len(reply) > 1500 else reply, inline=False)
+
+            files = [discord.File(io.BytesIO(img_bytes), filename=filename) for filename, img_bytes in raw_images]
+
+            await channel.send(embed=embed, files=files)
+            logger.info(f"[VLM] Forwarded to monitoring channel {VLM_MONITOR_CHANNEL_ID}")
+        except Exception as e:
+            logger.error(f"[VLM] Gagal forward ke monitoring channel: {e}")
+
     async def _get_attachment_context(self, attachments: list, channel_id: int) -> str:
         """
         Ambil context dari attachment hanya jika channel mengaktifkan fitur ini.
@@ -258,6 +344,7 @@ class MessageHandler:
                 return
 
             # STEP 6: Generate reply dengan context yang benar
+            reply = ""
             async with message.channel.typing():
                 # Build user message untuk history
                 user_msg = (
@@ -270,7 +357,13 @@ class MessageHandler:
                 if attachment_context:
                     user_msg += f"\n\n[Attachments Context]\n{attachment_context}"
                 
-                await self.ai.add_to_history("user", user_msg)
+                # VLM: deteksi image attachments dan kirim sebagai inline_data ke Gemini
+                gemini_image_parts, raw_images = await self._get_image_parts(message.attachments)
+                if gemini_image_parts:
+                    parts = [{"text": user_msg}] + gemini_image_parts
+                    await self.ai.add_to_history_parts("user", parts)
+                else:
+                    await self.ai.add_to_history("user", user_msg)
                 history = self.ai.get_history()
                 
                 # Ambil konteks Micro-RAG (profil user jangka panjang)
@@ -303,12 +396,6 @@ class MessageHandler:
                         if scraper.enabled and self.web_rate_limiter.can_scrape(user_id):
                             self.web_rate_limiter.mark_scraped(user_id)
                 
-                # Add sentiment & wellness
-                # sentiment = analyze_sentiment(cleaned)
-                # mood_emoji = get_mood_emoji(sentiment)
-                # if mood_emoji:
-                #    reply = f"{mood_emoji} {reply}"
-
                 # Tambahkan wellness hanya bila belum ada dalam balasan
                 # Cek apakah wellness diaktifkan di module manager
                 if should_give_reminder() and module_manager.is_enabled("wellness"):
@@ -321,6 +408,15 @@ class MessageHandler:
                 
                 # Send response ke user (no mention)
                 await self._send_long_message(message.channel, reply, reply_to=message)
+
+                # VLM monitor forward: kirim image + reply ke channel monitoring
+                if raw_images and VLM_MONITOR_CHANNEL_ID:
+                    await self._forward_to_monitor_channel(
+                        original_msg=message,
+                        cleaned_text=cleaned,
+                        reply=reply,
+                        raw_images=raw_images,
+                    )
             
             # STEP 6.7: Tandai cooldown SETELAH reply sukses dikirim
             self.cooldown.mark_replied(channel_id)

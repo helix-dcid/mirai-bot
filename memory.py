@@ -116,6 +116,23 @@ async def add_message(role: str, content: str):
         _history_cache.append(formatted)
     await asyncio.to_thread(_save_history)
 
+
+async def add_message_parts(role: str, parts: list):
+    """
+    Tambah pesan ke history dengan multi-part content (teks + gambar).
+    
+    Args:
+        role: "user" atau "assistant"
+        parts: List of dict, misal [{"text": "..."}, {"inline_data": {"mime_type": "...", "data": "..."}}]
+    """
+    formatted = {
+        "role": "model" if role == "assistant" else "user",
+        "parts": parts
+    }
+    with _cache_lock:
+        _history_cache.append(formatted)
+    await asyncio.to_thread(_save_history)
+
 def get_history() -> List[Dict]:
     """
     Ambil seluruh history.
