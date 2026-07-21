@@ -9,7 +9,7 @@ Tools yang didaftarkan (semantic — butuh LLM routing):
 
 Tools yang TIDAK didaftarkan (deterministic — regex detection):
   - scrape_webpage: URL terdeteksi → Browserless scrape
-  - get_youtube_transcript: YouTube URL terdeteksi → yt-dlp
+  - get_youtube_transcript: yt-dlp transcript extraction (function calling)
 """
 
 from core.module_manager import module_manager
@@ -67,11 +67,39 @@ TOOL_DECLARATIONS = {
             "required": ["query"],
         },
     },
+    "get_youtube_transcript": {
+        "name": "get_youtube_transcript",
+        "description": (
+            "Fetch the transcript/subtitle text of a YouTube video. "
+            "Use this when the user shares a YouTube link and asks about "
+            "the video's content, wants a summary, needs the transcript, "
+            "or asks what the video is about (e.g., 'apa isi video ini', "
+            "'ringkas video ini', 'transkrip video ini'). "
+            "Pass the full YouTube URL (youtube.com/watch?v=... or youtu.be/...). "
+            "Do NOT use this for general web search queries."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_url": {
+                    "type": "string",
+                    "description": (
+                        "Full YouTube video URL, e.g. "
+                        "'https://www.youtube.com/watch?v=dQw4w9WgXcQ' "
+                        "or 'https://youtu.be/dQw4w9WgXcQ'. "
+                        "Extract the exact URL from the user's message."
+                    ),
+                }
+            },
+            "required": ["video_url"],
+        },
+    },
 }
 
 MODULE_TO_TOOL = {
     "weather": "get_weather",
     "search": "search_web",
+    "youtube_transcript": "get_youtube_transcript",
 }
 
 

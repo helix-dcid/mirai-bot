@@ -19,9 +19,11 @@ class ToolExecutor:
     def __init__(self, gemini_client):
         self._bmkg = gemini_client.bmkg
         self._web_search = gemini_client.web_search
+        self._youtube_transcript = gemini_client.youtube_transcript
         self._handlers = {
             "get_weather": self._execute_weather,
             "search_web": self._execute_search,
+            "get_youtube_transcript": self._execute_youtube_transcript,
         }
 
     async def execute(self, function_call: dict) -> dict:
@@ -103,6 +105,34 @@ class ToolExecutor:
             "results": data["results"],
             "answer": data.get("answer", ""),
             "engine": data.get("engine", "web"),
+        }
+
+    async def _execute_youtube_transcript(self, args: dict) -> dict:
+        video_url = args.get("video_url", "")
+        if not video_url:
+            return {"error": "No video URL provided."}
+
+        logger.info(f"[ToolExecutor] get_youtube_transcript('{video_url[:60]}')")
+        result = await self._youtube_transcript.get_transcript(video_url)
+
+        if not result:
+            return {"error": f"Failed to fetch transcript for: {video_url}"}
+
+        transcript = result.get("transcript")
+        if not transcript:
+            return {
+                "video_id": result["video_id"],
+                "title": result.get("title", "Unknown"),
+                "transcript": None,
+                "note": "Video ini tidak memiliki subtitle/closed captions yang bisa diekstrak.",
+                "url": result["url"],
+            }
+
+        return {
+            "video_id": result["video_id"],
+            "title": result.get("title", "Unknown"),
+            "transcript": transcript,
+            "url": result["url"],
         }
 
 

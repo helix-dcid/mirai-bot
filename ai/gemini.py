@@ -283,111 +283,19 @@ class GeminiClient:
             return ""
 
     # ------------------------------------------------------------------
-    # YouTube Transcript context
-    # ------------------------------------------------------------------
-    async def _get_youtube_transcript_context(self, user_message: str) -> str:
-        """
-        Deteksi URL YouTube dalam pesan user, ekstrak transkrip via yt-dlp,
-        return konteks untuk AI. Mirip pola _get_webpage_context().
-        
-        Hanya inject transkrip jika:
-          1. Module youtube_transcript aktif
-          2. Pesan mengandung kata tanya tentang video (keyword detection)
-          3. Atau pesan hanya berisi URL (user minta tolong baca video)
-        """
-        if not self.youtube_transcript.enabled:
-            return ""
-        
-        if not module_manager.is_enabled("youtube_transcript"):
-            return ""
-        
-        # Pakai clean message (buang metadata wrapper dari handle())
-        clean_msg = self._extract_user_message_only(user_message)
-        urls = self.youtube_transcript.extract_urls(clean_msg)
-        if not urls:
-            return ""
-        
-        # Keyword detection: hanya inject jika user bertanya tentang video
-        # Cegah token waste untuk casual share link
-        msg_lower = clean_msg.lower()
-        video_keywords = [
-            "apa", "tentang", "isi", "kata", "bicarakan", "jelaskan",
-            "ringkas", "transkrip", "subtitle", "teks", "terjemahkan",
-            "video ini", "lihat", "tonton", "perhatikan", "cek",
-            "analisa", "analisis", "review", "ulas", "bahas",
-        ]
-        has_question = any(kw in msg_lower for kw in video_keywords)
-        # Juga inject jika ada kata perintah: "ringkas video ini", "apa isi video"
-        # Atau jika pesan hanya URL (tidak ada teks lain) — user minta baca
-        only_url = len(urls) == 1 and msg_lower.strip() == urls[0].lower().strip()
-        
-        if not has_question and not only_url:
-            logger.debug(f"[Gemini] YouTube URL ditemukan tapi tidak ada kata kunci, skip transkrip")
-            return ""
-        
-        # Ambil URL pertama saja
-        url = urls[0]
-        
-        try:
-            result = await self.youtube_transcript.get_transcript(url)
-            if not result:
-                return ""
-            
-            video_id = result["video_id"]
-            title = result["title"]
-            transcript = result.get("transcript")
-            
-            if transcript:
-                ctx = (
-                    f"\n\n[TRANSKRIP YOUTUBE: {title}]\n"
-                    f"URL: {result['url']}\n\n"
-                    f"{transcript}\n\n"
-                    "⚠️ INSTRUKSI: Teks di atas adalah transkrip REAL dari video YouTube "
-                    "yang user bagikan. Gunakan informasi ini untuk menjawab pertanyaan user "
-                    "tentang isi video tersebut. Jangan bilang kamu tidak bisa melihat atau "
-                    "mengakses video — karena transkrip sudah tersedia di atas. "
-                    "Jawab dengan gaya ramah Mirai dan berikan ringkasan informatif "
-                    "tentang isi video."
-                )
-                return ctx
-            else:
-                # Video ditemukan tapi tidak ada subtitle
-                ctx = (
-                    f"\n\n[VIDEO YOUTUBE: {title}]\n"
-                    f"URL: {result['url']}\n\n"
-                    "⚠️ INFORMASI: Video ini tidak memiliki subtitle/transkrip yang bisa "
-                    "diekstrak. Beri tahu user bahwa video tersebut tidak memiliki teks "
-                    "tertutup (closed captions) sehingga kamu tidak bisa membaca isinya. "
-                    "Namun kamu tetap bisa memberikan informasi umum tentang video tersebut "
-                    "berdasarkan judulnya."
-                )
-                return ctx
-        except Exception as e:
-            logger.warning(f"[Gemini] Failed to get YouTube transcript: {e}")
-            return ""
-
-    # ------------------------------------------------------------------
-    # Deterministic URL context (webpage + YouTube)
+    # Deterministic URL context (webpage only)
     # ------------------------------------------------------------------
     async def _detect_and_fetch_url_context(self, user_message: str) -> str:
         """
-        Regex-detect URLs and fetch context deterministically.
-        Returns combined webpage + youtube context string.
-        Called before payload building — no LLM needed for URL detection.
+        Regex-detect webpage URLs and fetch context deterministically.
+        YouTube transcript is now handled via function calling, not pre-fetch.
         """
-        contexts = []
-
-        if module_manager.is_enabled("youtube_transcript"):
-            yt_ctx = await self._get_youtube_transcript_context(user_message)
-            if yt_ctx:
-                contexts.append(yt_ctx)
-
         if module_manager.is_enabled("web_scraper"):
             web_ctx = await self._get_webpage_context(user_message)
             if web_ctx:
-                contexts.append(web_ctx)
+                return web_ctx
 
-        return "".join(contexts)
+        return ""
 
     # ------------------------------------------------------------------
     # Build payload (system instruction + contents)

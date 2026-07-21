@@ -1,5 +1,9 @@
 # Changelog - Mirai Helix
 
+## [4.2.0] - 2026-07-22
+### 🔄 Changed
+- **YouTube Transcript migrasi ke function calling**: Dari deterministic pre-fetch (regex detect + inject ke prompt) menjadi 2-turn Gemini function calling. User kirim YT link → Gemini detect → `functionCall: get_youtube_transcript` → ToolExecutor fetch via yt-dlp → Turn 2 hasil. Konsisten dengan weather/search pattern. (`ai/tool_definitions.py`, `ai/tool_executor.py`, `ai/gemini.py`)
+
 ## [4.1.0] - 2026-07-21
 ### ✨ Added
 - **Context Compaction** — Riwayat percakapan otomatis diringkas via Groq saat mencapai 15 pesan. Sistem kompaksi multi-level: ringkasan baru menggabungkan ringkasan lama + percakapan baru. Ringkasan disimpan ke `data/compacted_context.json` dan disuntikkan ke konteks Gemini. Request lain diblokir selama proses kompaksi. (`tools/context_compactor.py`, `memory.py`, `message_handler.py`)

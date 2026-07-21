@@ -1,0 +1,10 @@
+{
+    "calculator": true,
+    "weather": true,
+    "greeting": true,
+    "deepseek": true,
+    "wellness": true,
+    "web_scraper": true,
+    "youtube_transcript": true,
+    "search": true
+}
