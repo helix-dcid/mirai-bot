@@ -1,26 +1,24 @@
 # Mirai Helix 🤖✨
 
-![Discord](https://img.shields.io/badge/h.e.l.i.x-server-brightgreen?style=for-the-badge&logo=discord&logoColor=white)
-[![Discord](https://img.shields.io/discord/1388310480803598458?style=for-the-badge&logo=discord&label=HEALTH)](https://discord.gg/h7EUsuDjg5)
+![Discord](https://img.shields.io/badge/H.E.L.I.X-Mirai%20Bot-5865F2?style=for-the-badge&logo=discord&logoColor=white)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 
-Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash) untuk analisis percakapan mendalam, pembuatan laporan otomatis, dan memori jangka panjang (Micro-RAG).
+Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash), **Function Calling** untuk cuaca, web search & berita, **Micro-RAG** memori jangka panjang, dan **Batch Analysis** otomatis.
 
 ## ✨ Fitur Utama
 
-- **💬 Gaya Bicara Natural**: Bahasa Indonesia semi-informal dengan partikel alami (*nggak, kok, sih*), micro-ekspresi, dan teknik *echo* untuk empati maksimal.
-- **🧠 Micro-RAG Memory**: Profiling user jangka panjang dengan **TTL 3 hari** dan **thread-safe** di `data/user_profiles.json`.
-- **📄 Laporan Batch Otomatis**: Analisis percakapan harian via DeepSeek V4 Pro/Flash, dikirim sebagai file TXT.
-- **⏰ Jadwal Auto-Run Fleksibel**: Atur jam eksekusi batch secara custom (0-23 WIB) via slash command tanpa restart.
-- **📍 Channel Hasil Terpusat**: Tentukan channel khusus untuk laporan agar chat tidak berantakan.
-- **📂 Attachment Processing**: Membaca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
-- **🔄 Multi-Provider AI**: Gemini, Groq, DeepSeek V4 Pro, DeepSeek V4 Flash dengan mekanisme fallback.
-- **📍 Database Wilayah Offline**: Bot otomatis mendownload & meng-import database wilayah Kemendagri (~91rb lokasi) ke SQLite saat pertama kali `/cuaca` digunakan. File SQL dihapus setelah import untuk hemat disk.
-- **⚡ Module Manager**: Kontrol modul aktif/nonaktif dinamis tanpa restart.
-- **🌤️ Integrasi BMKG**: Data cuaca real-time dari BMKG dengan database wilayah offline (91.162 lokasi) via `aiosqlite` — download otomatis saat pertama digunakan.
-- **🌐 Web Search via Browserless**: Deteksi URL otomatis di chat, scrap konten web via Browserless REST API, cache per URL (5 menit), SSRF protection, dan rate limiter per-user (1x/minggu).
-- **🎬 YouTube Transcript via yt-dlp**: Deteksi URL YouTube otomatis, ekstrak subtitle/closed captions via yt-dlp tanpa download video. Parse SRT/VTT ke teks bersih, cache per video ID (1 jam), SSRF protection, keyword detection (hanya inject transkrip jika user bertanya tentang video). Module `youtube_transcript` (default aktif).
-- **🔍 Web Search via Tavily**: Pencarian web aktif saat user bertanya tentang informasi terkini. Primary: Tavily Search API (AI-optimized results, include_answer). Fallback: DuckDuckGo (gratis, tanpa API key). Auto-detect pertanyaan faktual via keyword detection, cache per query (5 menit), result clipping (8000 chars). Module `search` (default aktif, toggle terpisah dari Browserless scraping).
-- **💻 Slash Commands Lengkap**: Modular, terorganisir per fitur.
+- **💬 Gaya Bicara Natural**: Bahasa Indonesia semi-informal dengan partikel alami, micro-ekspresi, dan teknik *echo* untuk empati maksimal. 12+ mode adaptasi sesuai mood user (panik, sedih, bingung, marah, bahagia).
+- **🧠 Multi-Provider AI**: Gemini 2.5 Flash (utama), Groq Llama 3.1 (fallback), DeepSeek V4 Pro/Flash via NVIDIA NIM (batch analysis).
+- **⚡ Gemini Function Calling**: Cuaca, web search, dan berita diakses via semantic tool calling — Gemini memutuskan sendiri kapan butuh data eksternal.
+- **🌤️ Cuaca BMKG**: Data real-time dengan database offline 91.162 lokasi Indonesia. Download otomatis via `aiosqlite`.
+- **🔍 Web Search 3-Tier**: Tavily (primary) → DuckDuckGo (fallback) → Browserless SearXNG (tertiary). Cache per query, rate limiter per-user.
+- **🌐 Web Scraper**: Scrap konten web via Browserless `/content` + `/scrape` fallback. SSRF protection, cache per URL.
+- **🎬 YouTube Transcript**: Ekstrak subtitle via yt-dlp tanpa download video. Cache per video ID, keyword detection.
+- **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
+- **🧠 Micro-RAG Memory**: Profiling user jangka panjang via Groq — kepribadian, minat, mood, EXP system.
+- **📄 Batch Analysis Otomatis**: DeepSeek V4 menganalisis percakapan harian, dikirim sebagai file TXT/PDF.
+- **⚡ Module Manager Dinamis**: 9 module toggleable tanpa restart (calculator, weather, news, greeting, deepseek, wellness, web_scraper, youtube_transcript, search).
+- **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, news refresh, resource monitor (auto-pause modul saat CPU >70%).
 
 ## 🧠 DeepSeek Model Selection
 
@@ -57,8 +55,8 @@ Gunakan perintah `/deepseek model` untuk melihat dan mengganti model aktif.
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/harukayuka/mirai-helix.git
-cd mirai-helix
+git clone https://github.com/helix-dcid/mirai-bot.git
+cd mirai-bot
 ```
 
 ### 2. Virtual Environment
@@ -133,7 +131,7 @@ python main.py
 | `/deepseek autorun` | Atur jadwal auto-run |
 | `/deepseek forced_channel` | Set channel paksa hasil |
 
-> `/qwen` grup commands juga tersedia dengan fungsi yang sama (backward compatibility).
+> ⚠️ `/qwen` grup commands adalah alias backward-compat untuk `/deepseek`.
 
 ### Pengaturan Server
 | Command | Deskripsi |
@@ -150,47 +148,65 @@ python main.py
 
 ```
 mirai-helix/
-├── ai/
+├── ai/                       # AI provider clients & integrations
+│   ├── gemini.py             # Client Google Gemini + function calling
 │   ├── deepseek_client.py   # Client DeepSeek V4 Pro/Flash (NVIDIA NIM)
-│   ├── gemini.py            # Client Google Gemini
-│   ├── web_scraper.py       # Client Browserless REST API
-│   ├── web_search.py        # Client Tavily + DuckDuckGo web search
-│   ├── youtube_transcript.py# Client yt-dlp YouTube transcript
-│   ├── cuaca.py             # Client BMKG cuaca
+│   ├── cuaca.py             # BMKG weather (offline SQLite, 91k lokasi)
+│   ├── web_scraper.py       # Browserless REST API client
+│   ├── web_search.py        # Tavily + DuckDuckGo + Browserless search
+│   ├── youtube_transcript.py# yt-dlp subtitle extraction
+│   ├── news_summary.py      # RSS news + Groq summarization
+│   ├── intent_classifier.py # Klasifikasi search vs chat
+│   ├── query_reformer.py    # Reformulasi query pencarian
+│   ├── tool_definitions.py  # Gemini function calling schemas
+│   ├── tool_executor.py     # Eksekusi functionCall Gemini
 │   └── prompts/             # System prompt Mirai
-├── commands/                # Slash commands (modular)
+├── commands/                 # Slash commands (modular)
 │   ├── info_command.py      # /ask, /ping, /info, /clear, /status, /cuaca
 │   ├── health_command.py    # /bmi, /water
-│   ├── deepseek_command.py  # /deepseek (manajemen batch & model)
-│   ├── qwen_command.py      # /qwen (backward compat batch)
+│   ├── deepseek_command.py  # /deepseek (batch & model)
+│   ├── qwen_command.py      # /qwen (backward compat)
 │   ├── module_command.py    # /module
 │   ├── greeting_command.py  # /greeting
 │   ├── search_command.py    # /search, /search-ai
 │   └── general.py           # /report
-├── core/
-│   ├── command.py           # Loader commands (memanggil semua file di commands/)
-│   ├── qwen_batch.py        # Logika batch processing
+├── core/                     # Orchestrator
+│   ├── bot.py               # Discord client factory
+│   ├── router.py            # Main router (wires everything)
+│   ├── command.py           # Slash command loader
 │   ├── module_manager.py    # Manajemen modul dinamis
-│   └── file_reading.py      # Ekstraksi teks dari file
-├── data/
-│   ├── deepseek_config.json # Konfigurasi model & batch DeepSeek
-│   ├── deepseek_user/       # Riwayat chat per user
-│   ├── user_profiles.json   # Profil user (Micro-RAG)
-│   └── module_config.json   # Status aktif/nonaktif modul
+│   └── events/
+│       └── message_handler.py # Pipeline pemrosesan pesan
+├── services/                 # Service layer
+│   ├── ai_service.py        # AI Service (Gemini + memory)
+│   └── scheduler_service.py # Background scheduler
+├── tools/                    # Tool modules
+│   ├── micro_rag.py         # Profiling user jangka panjang
+│   ├── greeting.py          # Welcome/goodbye system
+│   ├── qwen_batch.py        # Batch conversation analysis
+│   ├── search_session.py    # Multi-turn search tracking
+│   └── file_reading.py      # Attachment text extraction
+├── managers/
+│   └── cooldown_manager.py  # Per-channel cooldown
 ├── utils/
-│   ├── web_rate_limiter.py  # Rate limiter per-user untuk web search
-│   ├── sentiment.py         # Analisis sentimen
-│   ├── calculator.py        # Kalkulator kesehatan
-│   ├── cleanup.py           # Pembersihan data
-│   ├── wellness.py          # Utilitas kesehatan
+│   ├── logger.py            # Centralized logging
 │   ├── identity.py          # Resolusi identitas user
-│   └── logger.py            # Setup logging
+│   ├── calculator.py        # Kalkulator kesehatan
+│   ├── wellness.py          # Wellness reminders
+│   ├── cleanup.py           # Pembersihan data lama
+│   └── web_rate_limiter.py  # Rate limiter scraping
+├── data/                     # Runtime data
+│   ├── wilayah.db           # Database BMKG offline
+│   ├── chat_log.json        # Chat log untuk Micro-RAG
+│   └── *.json               # Config runtime
 ├── .env                     # Konfigurasi sensitif (JANGAN di-commit)
 ├── .env.example             # Template konfigurasi environment
 ├── requirements.txt         # Dependencies
 ├── main.py                  # Entry point
-├── README.md
-└── CHANGELOG.md
+├── memory.py                # Conversation history system
+├── config.py                # Application constants
+├── CHANGELOG.md
+└── README.md
 ```
 
 ## 🔄 Alur Kerja Batch
