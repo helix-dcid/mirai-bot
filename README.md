@@ -1,13 +1,13 @@
-# Mirai Helix
+# Mirai Helix 🤖✨
 
-[![Discord](https://img.shields.io/badge/H.E.L.I.X-Mirai%20Bot-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://helix-dcid.pages.dev)
+![Discord](https://img.shields.io/badge/H.E.L.I.X-Mirai%20Bot-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-helix--dcid.pages.dev-FF7139?style=for-the-badge&logo=cloudflare&logoColor=white)](https://helix-dcid.pages.dev)
 
-Discord AI assistant dengan kepribadian "Mirai" — bijaksana, kritis, dan suportif. Dibangun dengan `discord.py` dan arsitektur **Multi-Provider AI** (Gemini, Groq, DeepSeek V4).
+> **Status**: Active Development — v4.2.0
 
----
+Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash), **Function Calling** untuk cuaca & web search, **Micro-RAG** memori jangka panjang, dan **Batch Analysis** otomatis.
 
 ## About H.E.L.I.X
 
@@ -15,53 +15,33 @@ Discord AI assistant dengan kepribadian "Mirai" — bijaksana, kritis, dan supor
 
 **Mirai Helix** is the official AI assistant developed for the H.E.L.I.X community, designed to provide interactive conversations, utilities, and AI-powered features.
 
----
-
 ## 🔗 Links
 
 - 🌐 **Website**: https://helix-dcid.pages.dev
 - 💬 **Discord Community**: https://discord.gg/helix
 - 💻 **GitHub Organization**: https://github.com/helix-dcid
 
----
+## ✨ Fitur Utama
 
-## 🚧 Status
-
-Active Development — v4.2.0
-
----
+- **💬 Gaya Bicara Natural**: Bahasa Indonesia semi-informal dengan partikel alami, micro-ekspresi, dan teknik echo untuk respons yang lebih natural dan suportif. 12+ mode adaptasi sesuai mood user (panik, sedih, bingung, marah, bahagia).
+- **🧠 Multi-Provider AI**: Gemini 2.5 Flash (utama), Groq Llama 3.1 (fallback & kompaksi), DeepSeek V4 Pro/Flash via NVIDIA NIM (batch analysis).
+- **⚡ Gemini Function Calling**: Cuaca, web search, dan YouTube transcript diakses via semantic tool calling — Gemini memutuskan sendiri kapan butuh data eksternal.
+- **🌤️ Cuaca BMKG**: Data real-time dengan database offline 91.162 lokasi Indonesia. Download otomatis via `aiosqlite`.
+- **🔍 Web Search 3-Tier**: Tavily (primary) → DuckDuckGo (fallback) → Browserless SearXNG (tertiary). Cache per query, rate limiter per-user.
+- **🌐 Web Scraper**: Scrap konten web via Browserless `/content` + `/scrape` fallback. SSRF protection, cache per URL.
+- **🎬 YouTube Transcript**: Ekstrak subtitle via yt-dlp tanpa download video. Cache per video ID, keyword detection.
+- **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
+- **🧠 Micro-RAG Memory**: Profiling user jangka panjang via Groq — kepribadian, minat, mood, EXP system.
+- **📄 Batch Analysis Otomatis**: DeepSeek V4 menganalisis percakapan harian, dikirim sebagai file TXT/PDF.
+- **⚡ Module Manager Dinamis**: 8 module toggleable tanpa restart (calculator, weather, greeting, deepseek, wellness, web_scraper, youtube_transcript, search).
+- **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, resource monitor (auto-pause modul saat CPU >70%).
+- **🧠 Context Compaction**: Riwayat percakapan otomatis diringkas via Groq saat mencapai batas, memori terus berlanjut tanpa kehilangan konteks.
 
 ## 📸 Preview
 
-<img src="assets/mirai-preview.png" width="700" alt="Mirai Helix Preview">
+<img src="assets/mirai-preview.png" width="700">
 
-*Screenshot: Percakapan AI, info bot, cuaca BMKG, dan web search.*
-
----
-
-## ✨ Fitur
-
-### User Features
-
-- **💬 AI Chat**: Bahasa Indonesia natural dengan 12+ mode adaptasi sesuai mood user (panik, sedih, bingung, marah, bahagia).
-- **🌤️ Cuaca BMKG**: Real-time forecast dengan database offline 91.162 lokasi Indonesia.
-- **🔍 Web Search**: Three-tier search (Tavily → DuckDuckGo → SearXNG), bisa langsung tanya atau minta Mirai jelaskan.
-- **🎬 YouTube Transcript**: Ekstrak dan rangkum subtitle video YouTube.
-- **📂 File Reading**: Upload PDF, DOCX, XLSX, PPTX, TXT — Mirai bacain isinya.
-- **💊 Health Tools**: Kalkulator BMI, kebutuhan air harian, wellness reminders.
-- **🌐 Web Scraper**: Kasih link artikel, Mirai rangkum isinya.
-
-### Developer Features
-
-- **🧠 Multi-Provider AI**: Gemini 2.5 Flash (utama), Groq Llama 3.1 (fallback/kompaksi), DeepSeek V4 Pro/Flash via NVIDIA NIM (batch analysis).
-- **⚡ Gemini Function Calling**: Cuaca, web search, YouTube transcript — Gemini memutuskan sendiri kapan butuh data eksternal lewat semantic tool calling.
-- **🧠 Micro-RAG Memory**: Profiling user jangka panjang via Groq — kepribadian, minat, mood, EXP system.
-- **📄 Batch Analysis Otomatis**: DeepSeek V4 menganalisis percakapan harian, dikirim sebagai file TXT/PDF ke channel.
-- **⚡ Module Manager Dinamis**: 8 module toggleable tanpa restart.
-- **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, resource monitor (auto-pause modul saat CPU >70%).
-- **🧠 Context Compaction**: Riwayat percakapan otomatis diringkas saat mencapai batas, tanpa kehilangan konteks.
-
----
+*Screenshot: Percakapan AI, info bot, cuaca BMKG, web search.*
 
 ## 🧠 DeepSeek Model Selection
 
@@ -73,8 +53,6 @@ Bot mendukung **dua model DeepSeek V4** yang bisa dipilih langsung dari Discord:
 | **DeepSeek V4 Flash** | `deepseek-ai/deepseek-v4-flash` | Test cepat, butuh respons lebih ringan |
 
 Gunakan perintah `/deepseek model` untuk melihat dan mengganti model aktif.
-
----
 
 ## 🛠️ Teknologi
 
@@ -90,15 +68,11 @@ Gunakan perintah `/deepseek model` untuk melihat dan mengganti model aktif.
 - **YouTube Transcript**: yt-dlp (subtitle extraction, lokal, gratis)
 - **Data Persistence**: `json` dengan **Atomic Write** & **Thread Locking**
 
----
-
 ## 📋 Prasyarat
 
 - Python 3.11+
 - Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
 - API Keys: Google Gemini, Groq, NVIDIA (DeepSeek)
-
----
 
 ## ⚙️ Instalasi & Setup
 
@@ -141,8 +115,6 @@ TAVILY_API_KEY=your_tavily_api_key  # opsional, untuk web search aktif (tavily.c
 ```bash
 python main.py
 ```
-
----
 
 ## 📖 Slash Commands
 
@@ -192,8 +164,8 @@ python main.py
 | `/greeting status` | Status welcome/goodbye |
 | `/greeting toggle` | Aktifkan/nonaktifkan greeting |
 | `/greeting setchannel` | Set channel greeting |
-
----
+| `/bedtime on/off/status` | Pengingat waktu tidur |
+| `/online_counter on/off/status` | Penghitung user voice |
 
 ## 📄 Struktur Direktori
 
@@ -260,8 +232,6 @@ mirai-helix/
 └── README.md
 ```
 
----
-
 ## 🔄 Alur Kerja Batch
 
 1. **Aktifkan modul**: `/deepseek toggle true`
@@ -273,8 +243,6 @@ mirai-helix/
 7. **Eksekusi**: otomatis sesuai jadwal, atau manual via `/deepseek run`
 8. **Laporan**: file TXT dikirim ke channel tujuan
 
----
-
 ## Roadmap
 
 - [x] Multi-provider AI (Gemini, Groq, DeepSeek)
@@ -285,19 +253,12 @@ mirai-helix/
 - [ ] Plugin marketplace
 - [ ] Multi-language support
 
----
-
 ## 📝 Changelog
-
 Lihat [CHANGELOG.md](CHANGELOG.md) untuk detail perubahan versi.
 
----
-
 ## 📜 Lisensi
-
 MIT License — lihat [LICENSE](LICENSE) untuk detail.
 
 ---
-
 *Dibuat dengan ❤️ untuk komunitas H.E.L.I.X.*
 *Asisten: Mirai (Perawat Muda & Pendamping Emosional)*
