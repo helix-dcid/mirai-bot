@@ -4,6 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-FF7139?style=for-the-badge&logo=openaccess&logoColor=white)](LICENSE)
 [![homepage](https://img.shields.io/badge/homepage-helix--dcid.pages.dev-FF7139?style=for-the-badge&logo=cloudflare&logoColor=white)](https://helix-dcid.pages.dev)
+[![Disboard](https://img.shields.io/badge/Disboard-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://disboard.org/server/your-server-id)
 
 > **Status**: Active Development — v4.2.0
 
