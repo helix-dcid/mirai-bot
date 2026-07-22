@@ -250,19 +250,23 @@ class GeminiClient:
     async def _get_webpage_context(self, user_message: str) -> str:
         """
         Deteksi URL dalam pesan user, scrap via Browserless, return konteks.
-        Mirip pola _get_weather_context().
+        YouTube/youtu.be URL langsung dialihkan ke yt-dlp transcript.
         """
-        if not self.web_scraper.enabled:
-            return ""
-
-        # Ekstrak URL dari pesan (pakai clean message, buang metadata wrapper)
         clean_msg = self._extract_user_message_only(user_message)
         urls = self.web_scraper.extract_urls(clean_msg)
         if not urls:
             return ""
 
-        # Ambil URL pertama saja (untuk sekarang)
         url = urls[0]
+
+        # YouTube URL → yt-dlp, bukan web_scraper
+        if YOUTUBE_URL_PATTERN.search(url):
+            if hasattr(self, 'youtube_transcript'):
+                return await self._get_youtube_context(url)
+            return ""
+
+        if not self.web_scraper.enabled:
+            return ""
 
         try:
             content = await self.web_scraper.scrape_url(url)
@@ -282,22 +286,49 @@ class GeminiClient:
             logger.warning(f"[Gemini] Failed to get webpage context: {e}")
             return ""
 
+    async def _get_youtube_context(self, url: str) -> str:
+        """Ambil transkrip YouTube via yt-dlp dan format sebagai konteks."""
+        try:
+            result = await self.youtube_transcript.get_transcript(url)
+            if not result:
+                return ""
+
+            title = result.get("title", "Video YouTube")
+            transcript = result.get("transcript")
+            if not transcript:
+                return ""
+
+            ctx = (
+                f"\n\n[TRANSCRIPT YOUTUBE: {title}]({url})\n"
+                f"{transcript}\n"
+                "\n⚠️ INSTRUKSI: Transkrip di atas adalah isi REAL dari video YouTube "
+                "yang user kirim. Gunakan data ini untuk menjawab pertanyaan user "
+                "tentang video tersebut. Jangan bilang kamu tidak punya akses ke "
+                "video — karena data sudah tersedia di atas. "
+                "Jawab dengan gaya ramah Mirai dan berikan ringkasan informatif."
+            )
+            return ctx
+        except Exception as e:
+            logger.warning(f"[Gemini] Failed to get YouTube transcript: {e}")
+            return ""
+
     # ------------------------------------------------------------------
     # Deterministic URL context (webpage only)
     # ------------------------------------------------------------------
     async def _detect_and_fetch_url_context(self, user_message: str) -> str:
         """
-        Regex-detect webpage URLs and fetch context deterministically.
-        YouTube transcript is now handled via function calling, not pre-fetch.
+        Regex-detect webpage/YouTube URLs and fetch context deterministically.
+        YouTube → yt-dlp transcript, regular URLs → Browserless scrape.
         """
-        # Skip YouTube URLs — handled via function calling
-        if YOUTUBE_URL_PATTERN.search(user_message):
+        has_youtube = bool(YOUTUBE_URL_PATTERN.search(user_message))
+        has_web = bool(self.web_scraper.extract_urls(user_message))
+
+        if not has_youtube and not has_web:
             return ""
 
-        if module_manager.is_enabled("web_scraper"):
-            web_ctx = await self._get_webpage_context(user_message)
-            if web_ctx:
-                return web_ctx
+        web_ctx = await self._get_webpage_context(user_message)
+        if web_ctx:
+            return web_ctx
 
         return ""
 
