@@ -2,7 +2,7 @@
 
 ![Discord](https://img.shields.io/badge/H.E.L.I.X-Mirai%20Bot-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-FF7139?style=for-the-badge&logo=openaccess&logoColor=white)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-helix--dcid.pages.dev-FF7139?style=for-the-badge&logo=cloudflare&logoColor=white)](https://helix-dcid.pages.dev)
 
 > **Status**: Active Development — v4.2.0
@@ -14,12 +14,6 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 **H.E.L.I.X** is an Indonesian Discord community focused on collaboration, learning, technology, and mental wellness.
 
 **Mirai Helix** is the official AI assistant developed for the H.E.L.I.X community, designed to provide interactive conversations, utilities, and AI-powered features.
-
-## 🔗 Links
-
-- 🌐 **Website**: https://helix-dcid.pages.dev
-- 💬 **Discord Community**: https://discord.gg/helix
-- 💻 **GitHub Organization**: https://github.com/helix-dcid
 
 ## ✨ Fitur Utama
 
@@ -36,12 +30,6 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **⚡ Module Manager Dinamis**: 8 module toggleable tanpa restart (calculator, weather, greeting, deepseek, wellness, web_scraper, youtube_transcript, search).
 - **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, resource monitor (auto-pause modul saat CPU >70%).
 - **🧠 Context Compaction**: Riwayat percakapan otomatis diringkas via Groq saat mencapai batas, memori terus berlanjut tanpa kehilangan konteks.
-
-## 📸 Preview
-
-<img src="assets/mirai-preview.png" width="700">
-
-*Screenshot: Percakapan AI, info bot, cuaca BMKG, web search.*
 
 ## 🧠 DeepSeek Model Selection
 
@@ -242,16 +230,6 @@ mirai-helix/
 6. **User diskusi** → pesan tersimpan otomatis
 7. **Eksekusi**: otomatis sesuai jadwal, atau manual via `/deepseek run`
 8. **Laporan**: file TXT dikirim ke channel tujuan
-
-## Roadmap
-
-- [x] Multi-provider AI (Gemini, Groq, DeepSeek)
-- [x] Memory system & conversation compaction
-- [x] Web tools (search, scrape, YouTube transcript)
-- [x] Batch analysis otomatis
-- [ ] Dashboard monitoring (usage stats, health metrics)
-- [ ] Plugin marketplace
-- [ ] Multi-language support
 
 ## 📝 Changelog
 Lihat [CHANGELOG.md](CHANGELOG.md) untuk detail perubahan versi.
