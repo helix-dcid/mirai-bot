@@ -229,54 +229,18 @@ def _parse_transcript(content: str, fmt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# yt-dlp Subprocess Wrapper
+# yt-dlp Python API wrapper (no subprocess)
 # ---------------------------------------------------------------------------
-
-async def _run_yt_dlp(args: List[str], timeout: int = 30) -> Tuple[int, str, str]:
-    """Jalankan yt-dlp via subprocess secara async.
-    
-    Args:
-        args: Argumen command line untuk yt-dlp
-        timeout: Timeout dalam detik
-    
-    Returns:
-        Tuple (returncode, stdout, stderr)
-    """
-    cmd = ["yt-dlp"] + args
-    
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout,
-            )
-            return process.returncode or 0, stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            return -1, "", f"Timeout setelah {timeout} detik"
-    
-    except FileNotFoundError:
-        return -2, "", "yt-dlp tidak ditemukan. Install dengan: pip install yt-dlp"
-    except Exception as e:
-        return -3, "", str(e)
-
 
 async def _get_video_data(
     video_id: str,
     output_dir: Path,
     sub_langs: Optional[List[str]] = None,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Ambil info video + subtitle dalam satu panggilan yt-dlp.
+    """Ambil info video + subtitle via yt-dlp Python API.
     
-    Menggabungkan --dump-json dengan --write-subs agar hanya satu 
-    subprocess call — menghemat ~3-5 detik latency.
+    Menggunakan yt_dlp.YoutubeDL langsung tanpa subprocess,
+    jadi tidak perlu binary yt-dlp di PATH (cocok untuk Docker minimal).
     
     Args:
         video_id: YouTube video ID
@@ -289,53 +253,46 @@ async def _get_video_data(
     url = f"https://www.youtube.com/watch?v={video_id}"
     langs = sub_langs or YOUTUBE_TRANSCRIPT_SUB_LANGS
     outtmpl = str(output_dir / f"{video_id}.%(ext)s")
-    
-    # Satu panggilan: ambil title + download subtitle sekaligus
-    # Pakai --print title (tidak mengaktifkan simulate mode seperti --dump-json)
-    # --socket-timeout mencegah hanging pada koneksi lambat
-    args = [
-        "--skip-download",
-        "--write-subs",
-        "--write-auto-subs",
-        "--sub-langs", ",".join(langs),
-        "--convert-subs", "srt",
-        "--print", "title",
-        "--output", outtmpl,
-        "--socket-timeout", "15",
-        "--no-warnings",
-        "--quiet",
-        url,
-    ]
-    
-    retcode, stdout, stderr = await _run_yt_dlp(args, timeout=45)
-    
-    # Log stderr untuk debugging
-    if retcode != 0 and stderr:
-        logger.warning(f"[YouTubeTranscript] yt-dlp error (retcode={retcode}): {stderr[:300]}")
-    
-    # Parse title dari stdout (baris pertama)
-    title = None
-    if stdout:
-        title = stdout.strip().splitlines()[0].strip()
-        if not title:
-            title = None
-    
-    # Cari file subtitle yang dihasilkan
-    file_path = None
-    sub_fmt = None
-    
-    if retcode == 0:
-        # Cari SRT hasil convert
-        for suffix in [f"{video_id}.srt", f"{video_id}.{langs[0]}.srt"]:
+
+    ydl_opts = {
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": langs,
+        "subtitlesformat": "srt",
+        "outtmpl": {"default": outtmpl},
+        "socket_timeout": 15,
+        "quiet": True,
+        "no_warnings": True,
+    }
+
+    try:
+        import yt_dlp
+
+        def _sync_extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                return info
+
+        info = await asyncio.to_thread(_sync_extract)
+
+        title = info.get("title") or None
+
+        # Cari file subtitle yang dihasilkan
+        file_path = None
+        sub_fmt = None
+
+        # Cari SRT hasil convert dulu
+        for suffix in [f"{video_id}.srt", f"{video_id}.{langs[0]}.srt",
+                       f"{video_id}.{langs[0]}.vtt"]:
             fpath = output_dir / suffix
             if fpath.exists() and fpath.stat().st_size > 0:
                 file_path = str(fpath)
-                sub_fmt = "srt"
+                sub_fmt = "srt" if suffix.endswith(".srt") else "vtt"
                 break
-        
+
         if not file_path:
-            # Cari VTT atau format lain
-            for ext in ["vtt", "ttml", "ass"]:
+            for ext in ["vtt", "ttml", "ass", "srt"]:
                 for f in output_dir.glob(f"{video_id}*.{ext}"):
                     if f.stat().st_size > 0:
                         file_path = str(f)
@@ -343,31 +300,15 @@ async def _get_video_data(
                         break
                 if file_path:
                     break
-    
-    # Fallback tanpa convert-subs (native format), jalankan meskipun retcode != 0
-    if not file_path:
-        args_fallback = [
-            "--skip-download",
-            "--write-auto-subs",
-            "--sub-langs", ",".join(langs),
-            "--output", outtmpl,
-            "--socket-timeout", "15",
-            "--no-warnings",
-            "--quiet",
-            url,
-        ]
-        retcode2, _, stderr2 = await _run_yt_dlp(args_fallback, timeout=45)
-        if retcode2 != 0 and stderr2:
-            logger.warning(f"[YouTubeTranscript] Fallback juga gagal: {stderr2[:300]}")
-        if retcode2 == 0:
-            for f in output_dir.glob(f"{video_id}*"):
-                if f.suffix in [".srt", ".vtt", ".ttml", ".ass"]:
-                    if f.stat().st_size > 0:
-                        file_path = str(f)
-                        sub_fmt = f.suffix.lstrip(".")
-                        break
-    
-    return title, file_path, sub_fmt
+
+        return title, file_path, sub_fmt
+
+    except ImportError:
+        logger.error("[YouTubeTranscript] yt-dlp tidak terinstall. Jalankan: pip install yt-dlp")
+        return None, None, None
+    except Exception as e:
+        logger.warning(f"[YouTubeTranscript] yt-dlp error: {e}")
+        return None, None, None
 
 
 def _cleanup_temp(video_id: str, output_dir: Path):
