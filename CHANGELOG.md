@@ -1,5 +1,17 @@
 # Changelog - Mirai Helix
 
+## [4.3.0] - 2026-07-23
+### 🔄 Changed
+- **Welcome message embed → plain text**: Pesan sambutan tidak lagi menggunakan `discord.Embed`. Langsung `channel.send()` dengan teks biasa. (`tools/auto_greeting.py`)
+- **Template welcome sesuai permintaan**: Pesan singkat dengan mention user + channel `#perkenalan` dan `#pedoman` (pakai ID). Tidak lagi AI-generated. (`tools/auto_greeting.py`)
+- **Channel greeting prioritas `chat-umum`**: Dicari pertama via ID 1389066613398966392, lalu nama, baru system channel sebagai fallback. (`tools/auto_greeting.py`)
+
+### 🗑️ Removed
+- **Goodbye message dihapus total**: Event `on_member_remove` dan seluruh method goodbye (`_get_goodbye_message`) dicabut. (`tools/auto_greeting.py`)
+
+### 🐛 Fixed
+- **`/greeting setchannel` dan `/greeting status` error**: `ImportError: cannot import name 'auto_greeting'` karena instance tidak diekspos di module level. Ditambahkan `auto_greeting = None` di module + diset oleh `Router` setelah inisialisasi. (`tools/auto_greeting.py`, `core/router.py`)
+
 ## [4.2.0] - 2026-07-22
 ### 🔄 Changed
 - **YouTube Transcript migrasi ke function calling**: Dari deterministic pre-fetch (regex detect + inject ke prompt) menjadi 2-turn Gemini function calling. User kirim YT link → Gemini detect → `functionCall: get_youtube_transcript` → ToolExecutor fetch via yt-dlp → Turn 2 hasil. Konsisten dengan weather/search pattern. (`ai/tool_definitions.py`, `ai/tool_executor.py`, `ai/gemini.py`)
