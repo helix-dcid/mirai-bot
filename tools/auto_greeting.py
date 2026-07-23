@@ -2,7 +2,6 @@
 import asyncio
 import discord
 import json
-import random
 from pathlib import Path
 from utils.logger import setup_logging
 from core.module_manager import module_manager
@@ -10,6 +9,9 @@ from core.module_manager import module_manager
 logger = setup_logging()
 
 CONFIG_PATH = Path("data/greeting_config.json")
+
+# Instance global — diset oleh Router() setelah inisialisasi
+auto_greeting = None
 
 class AutoGreeting:
     """
@@ -74,23 +76,17 @@ class AutoGreeting:
         config["guilds"][str(guild_id)]["channel_id"] = channel_id
         self._save_config(config)
 
-    def _get_fallback_welcome(self, member: discord.Member) -> str:
-        """Pesan sambutan cadangan jika API error/limit."""
-        fallbacks = [
-            f"Halo {member.mention}! Selamat datang di **{member.guild.name}**. Senang sekali kamu bisa bergabung bersama kami di sini. Semoga betah ya! ✨",
-            f"Selamat datang {member.mention}! 👋 Mari bergabung dalam obrolan dan jangan ragu untuk bertanya jika butuh bantuan. Semoga harimu menyenangkan di {member.guild.name}!",
-            f"Hai {member.mention}, selamat bergabung! 🌟 Kami sangat senang memilikimu di sini. Jangan lupa cek channel info ya!"
-        ]
-        return random.choice(fallbacks)
-
-    def _get_fallback_goodbye(self, member: discord.Member) -> str:
-        """Pesan perpisahan cadangan jika API error/limit."""
-        fallbacks = [
-            f"Sampai jumpa lagi, **{member.display_name}**. Terima kasih sudah pernah menjadi bagian dari {member.guild.name}. Semoga sukses di perjalananmu selanjutnya! 👋",
-            f"Selamat jalan {member.display_name}. Kami akan merindukan kehadiranmu di sini. Sampai bertemu lagi di lain waktu! ✨",
-            f"Terima kasih atas waktunya di {member.guild.name}, {member.display_name}. Hati-hati di jalan dan sukses selalu! 💙"
-        ]
-        return random.choice(fallbacks)
+    def _get_welcome_message(self, member: discord.Member) -> str:
+        """Pesan sambutan sesuai template yang diminta."""
+        name = member.display_name
+        perkenalan = "<#1391643015969509476>"
+        pedoman = "<#1389578192246935633>"
+        return (
+            f"Hey {member.mention} — {name} kan? Selamat datang!\n"
+            f"Ayo kenalan dulu lewat {perkenalan}.\n"
+            f"Oh ya, jangan sampai kelewatan {pedoman} ya, atau tanya pengurus aja kalau bingung.\n"
+            f"Makasih banyak!"
+        )
 
     def setup_events(self):
         @self.bot.event
@@ -105,66 +101,12 @@ class AutoGreeting:
 
             await asyncio.sleep(2)
             try:
-                async with channel.typing():
-                    welcome_msg = None
-                    try:
-                        # Coba generate dengan AI
-                        welcome_msg = await self.gemini.generate_welcome(member.display_name)
-                    except Exception as api_err:
-                        logger.warning(f"[WELCOME] API Error/Limit: {api_err}. Using fallback.")
-                    
-                    # Gunakan fallback jika AI gagal, limit, atau memberikan pesan error
-                    if not welcome_msg or any(err in welcome_msg for err in ["Maaf", "limit", "error", "⚠️"]):
-                        welcome_msg = self._get_fallback_welcome(member)
-                    else:
-                        # Pastikan mention user ada di pesan AI
-                        if member.mention not in welcome_msg:
-                            welcome_msg = f"Halo {member.mention}! {welcome_msg}"
+                welcome_msg = self._get_welcome_message(member)
 
-                    embed = discord.Embed(
-                        description=welcome_msg,
-                        color=discord.Color.teal()
-                    )
-                    embed.set_thumbnail(url=member.display_avatar.url)
-                    embed.set_footer(text=f"Member #{len(member.guild.members)}")
-                    
-                    await channel.send(content=f"✨ **Selamat Datang!** ✨", embed=embed)
-                    logger.info(f"[WELCOME] Sent welcome message for {member.display_name} in {channel.name}")
+                await channel.send(welcome_msg)
+                logger.info(f"[WELCOME] Sent welcome message for {member.display_name} in {channel.name}")
             except Exception as e:
                 logger.error(f"[WELCOME] Critical Error: {e}")
-
-        @self.bot.event
-        async def on_member_remove(member: discord.Member):
-            """Event saat member keluar."""
-            if member.bot or not self.is_enabled(member.guild.id):
-                return
-
-            channel = self._get_greeting_channel(member.guild)
-            if not channel:
-                return
-
-            try:
-                goodbye_msg = None
-                try:
-                    # Coba generate dengan AI
-                    goodbye_msg = await self.gemini.generate_goodbye(member.display_name)
-                except Exception as api_err:
-                    logger.warning(f"[GOODBYE] API Error/Limit: {api_err}. Using fallback.")
-                
-                # Gunakan fallback jika AI gagal, limit, atau memberikan pesan error
-                if not goodbye_msg or any(err in goodbye_msg for err in ["Maaf", "limit", "error", "⚠️"]):
-                    goodbye_msg = self._get_fallback_goodbye(member)
-
-                embed = discord.Embed(
-                    description=goodbye_msg,
-                    color=discord.Color.red()
-                )
-                embed.set_footer(text="Kami akan merindukanmu.")
-                
-                await channel.send(content=f"👋 **Sampai Jumpa...**", embed=embed)
-                logger.info(f"[GOODBYE] Sent goodbye message for {member.display_name} in {channel.name}")
-            except Exception as e:
-                logger.error(f"[GOODBYE] Critical Error: {e}")
 
     def _get_greeting_channel(self, guild: discord.Guild) -> discord.TextChannel:
         """Mencari channel terbaik untuk mengirim pesan sambutan."""
@@ -178,16 +120,21 @@ class AutoGreeting:
             if channel and isinstance(channel, discord.TextChannel) and channel.permissions_for(guild.me).send_messages:
                 return channel
 
-        # 2. Coba system channel
-        if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
-            return guild.system_channel
-            
+        # 2. Coba ID chat-umum yang sudah diketahui
+        known_channel = guild.get_channel(1389066613398966392)
+        if known_channel and isinstance(known_channel, discord.TextChannel) and known_channel.permissions_for(guild.me).send_messages:
+            return known_channel
+
         # 3. Cari channel dengan nama umum
-        common_names = ['welcome', 'greetings', 'halo', 'selamat-datang', 'general', 'umum']
+        common_names = ['chat-umum', 'general', 'umum', 'cat-umum', 'welcome', 'greetings', 'halo', 'selamat-datang']
         for name in common_names:
             channel = discord.utils.get(guild.text_channels, name=name)
             if channel and channel.permissions_for(guild.me).send_messages:
                 return channel
-                
-        # 4. Fallback
+
+        # 4. Coba system channel
+        if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
+            return guild.system_channel
+            
+        # 5. Fallback
         return next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)

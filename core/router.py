@@ -39,6 +39,9 @@ class Router:
         from tools.auto_greeting import AutoGreeting
         from ai.gemini import GeminiClient
         self.auto_greeting = AutoGreeting(self.bot, GeminiClient())
+        # Set module-level variable supaya greeting_command.py bisa import instance
+        import tools.auto_greeting as _ag
+        _ag.auto_greeting = self.auto_greeting
         
         self.setup_events()
 
