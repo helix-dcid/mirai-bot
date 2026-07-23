@@ -20,10 +20,12 @@ class ToolExecutor:
         self._bmkg = gemini_client.bmkg
         self._web_search = gemini_client.web_search
         self._youtube_transcript = gemini_client.youtube_transcript
+        self._jurnal = gemini_client.jurnal
         self._handlers = {
             "get_weather": self._execute_weather,
             "search_web": self._execute_search,
             "get_youtube_transcript": self._execute_youtube_transcript,
+            "get_journal_reference": self._execute_journal,
         }
 
     async def execute(self, function_call: dict) -> dict:
@@ -133,6 +135,24 @@ class ToolExecutor:
             "title": result.get("title", "Unknown"),
             "transcript": transcript,
             "url": result["url"],
+        }
+
+    async def _execute_journal(self, args: dict) -> dict:
+        query = args.get("query", "")
+        if not query:
+            return {"error": "No search query provided."}
+
+        logger.info(f"[ToolExecutor] get_journal_reference('{query[:60]}')")
+        data = await self._jurnal.search(query)
+
+        if not data or not data.get("results"):
+            return {"error": f"No journal references found for '{query}'."}
+
+        return {
+            "query": data["query"],
+            "total_results": data["total_results"],
+            "results": data["results"],
+            "source": "CrossRef (Academic Journals & Scientific Literature)",
         }
 
 

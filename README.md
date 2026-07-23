@@ -23,13 +23,14 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **⚡ Gemini Function Calling**: Cuaca, web search, dan YouTube transcript diakses via semantic tool calling — Gemini memutuskan sendiri kapan butuh data eksternal.
 - **🌤️ Cuaca BMKG**: Data real-time dengan database offline 91.162 lokasi Indonesia. Download otomatis via `aiosqlite`.
 - **🔍 Web Search 3-Tier**: Tavily (primary) → DuckDuckGo (fallback) → Browserless SearXNG (tertiary). Cache per query, rate limiter per-user.
+- **📚 Journal Reference**: Pencarian jurnal ilmiah via CrossRef API — otomatis menyertakan sitasi jurnal untuk jawaban kesehatan & keilmuan.
 - **👋 Auto-Welcome**: Sambutan member baru otomatis dengan teks plain (tanpa embed), template singkat yang merujuk ke #perkenalan dan #pedoman.
 - **🌐 Web Scraper**: Scrap konten web via Browserless `/content` + `/scrape` fallback. SSRF protection, cache per URL.
 - **🎬 YouTube Transcript**: Ekstrak subtitle via yt-dlp tanpa download video. Cache per video ID, keyword detection.
 - **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
 - **🧠 Micro-RAG Memory**: Profiling user jangka panjang via Groq — kepribadian, minat, mood, EXP system.
 - **📄 Batch Analysis Otomatis**: DeepSeek V4 menganalisis percakapan harian, dikirim sebagai file TXT/PDF.
-- **⚡ Module Manager Dinamis**: 8 module toggleable tanpa restart (calculator, weather, greeting, deepseek, wellness, web_scraper, youtube_transcript, search).
+- **⚡ Module Manager Dinamis**: 9 module toggleable tanpa restart (calculator, weather, greeting, deepseek, wellness, web_scraper, youtube_transcript, search, journal).
 - **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, resource monitor (auto-pause modul saat CPU >70%).
 - **🧠 Context Compaction**: Riwayat percakapan otomatis diringkas via Groq saat mencapai batas, memori terus berlanjut tanpa kehilangan konteks.
 
@@ -150,7 +151,7 @@ python main.py
 | Command | Deskripsi |
 |---------|-----------|
 | `/module status` | Status semua modul |
-| `/module toggle` | Aktifkan/nonaktifkan modul (Calculator, Weather, Greeting, Wellness, dll) |
+| `/module toggle` | Aktifkan/nonaktifkan modul (Calculator, Weather, Greeting, Wellness, Journal, dll) |
 | `/greeting status` | Status welcome otomatis |
 | `/greeting toggle` | Aktifkan/nonaktifkan welcome |
 | `/greeting setchannel` | Set channel untuk welcome |
@@ -167,6 +168,7 @@ mirai-helix/
 │   ├── cuaca.py             # BMKG weather (offline SQLite, 91k lokasi)
 │   ├── web_scraper.py       # Browserless REST API client
 │   ├── web_search.py        # Tavily + DuckDuckGo + Browserless search
+│   ├── jurnal.py            # CrossRef academic journal search
 │   ├── youtube_transcript.py# yt-dlp subtitle extraction
 │   ├── intent_classifier.py # Klasifikasi search vs chat
 │   ├── query_reformer.py    # Reformulasi query pencarian

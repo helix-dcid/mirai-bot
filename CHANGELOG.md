@@ -1,6 +1,9 @@
 # Changelog - Mirai Helix
 
 ## [4.3.0] - 2026-07-23
+### ✨ Added
+- **📚 Journal Reference (CrossRef)**: Fitur pencarian jurnal ilmiah dan literatur akademik via CrossRef API (gratis, tanpa API key). Terintegrasi sebagai Gemini function calling — Gemini otomatis mencari referensi jurnal saat user bertanya soal kesehatan, gejala medis, penelitian, atau topik keilmuan. Hasil mencakup judul, penulis, jurnal, tahun, DOI, dan abstrak. Module `journal` (default aktif, toggleable). (`ai/jurnal.py`, `ai/tool_definitions.py`, `ai/tool_executor.py`, `ai/gemini.py`, `ai/prompts/mirai_system_prompt.txt`)
+
 ### 🔄 Changed
 - **Welcome message embed → plain text**: Pesan sambutan tidak lagi menggunakan `discord.Embed`. Langsung `channel.send()` dengan teks biasa. (`tools/auto_greeting.py`)
 - **Template welcome sesuai permintaan**: Pesan singkat dengan mention user + channel `#perkenalan` dan `#pedoman` (pakai ID). Tidak lagi AI-generated. (`tools/auto_greeting.py`)

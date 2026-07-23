@@ -27,6 +27,7 @@ from ai.cuaca import BMKGClient
 from ai.web_scraper import BrowserlessClient
 from ai.youtube_transcript import YouTubeTranscriptClient, YOUTUBE_URL_PATTERN
 from ai.web_search import WebSearchClient
+from ai.jurnal import JurnalClient
 from core.module_manager import module_manager
 from ai.tool_definitions import get_active_tools
 from ai.tool_executor import ToolExecutor
@@ -121,6 +122,7 @@ class GeminiClient:
         self.web_scraper = BrowserlessClient()
         self.youtube_transcript = YouTubeTranscriptClient()
         self.web_search = WebSearchClient()
+        self.jurnal = JurnalClient()
         self.system_prompt = SYSTEM_PROMPT
         self._tool_executor: Optional[ToolExecutor] = None
         self._cache = {}
@@ -128,7 +130,7 @@ class GeminiClient:
         self._KEY_COOLDOWN = {}
         self._cache_lock = asyncio.Lock()
         logger.info(f"[Gemini] Initialized with {len(self.api_keys)} API key(s)")
-        logger.info("[Gemini] Function calling mode: active (weather, search via tool calling)")
+        logger.info("[Gemini] Function calling mode: active (weather, search, journal via tool calling)")
 
     # ------------------------------------------------------------------
     # Cache helpers

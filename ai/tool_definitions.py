@@ -67,6 +67,34 @@ TOOL_DECLARATIONS = {
             "required": ["query"],
         },
     },
+    "get_journal_reference": {
+        "name": "get_journal_reference",
+        "description": (
+            "Search academic journals and scientific literature for authoritative "
+            "references on health, medical, science, or any scholarly topic. "
+            "Use this when the user asks a health question ('apa penyebab...', "
+            "'gejala...', 'efek samping...'), a science question ('penelitian "
+            "tentang...', 'studi mengenai...', 'jurnal tentang...'), or whenever "
+            "citing a peer-reviewed source would add credibility to your answer. "
+            "Returns title, authors, journal name, year, DOI, and abstract. "
+            "Cite the source naturally when presenting the information."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Academic search query in Indonesian or English. "
+                        "Use keywords from the user's question. "
+                        "Example: 'efek vitamin D pada imunitas' or "
+                        "'cognitive behavioral therapy insomnia'."
+                    ),
+                }
+            },
+            "required": ["query"],
+        },
+    },
     "get_youtube_transcript": {
         "name": "get_youtube_transcript",
         "description": (
@@ -100,6 +128,7 @@ MODULE_TO_TOOL = {
     "weather": "get_weather",
     "search": "search_web",
     "youtube_transcript": "get_youtube_transcript",
+    "journal": "get_journal_reference",
 }
 
 
