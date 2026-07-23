@@ -77,7 +77,10 @@ TOOL_DECLARATIONS = {
             "tentang...', 'studi mengenai...', 'jurnal tentang...'), or whenever "
             "citing a peer-reviewed source would add credibility to your answer. "
             "Returns title, authors, journal name, year, DOI, and abstract. "
-            "Cite the source naturally when presenting the information."
+            "You MUST cite the journal title, author names, and year when presenting "
+            "the information. Include the DOI link at the end. "
+            "Example format: 'Penelitian berjudul [title] oleh [authors] di jurnal "
+            "[journal] tahun [year] menemukan bahwa...'"
         ),
         "parameters": {
             "type": "object",
