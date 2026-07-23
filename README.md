@@ -6,7 +6,7 @@
 [![homepage](https://img.shields.io/badge/homepage-helix--dcid.pages.dev-FF7139?style=for-the-badge&logo=cloudflare&logoColor=white)](https://helix-dcid.pages.dev)
 [![Disboard](https://img.shields.io/badge/Disboard-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://disboard.org/server/1388310480803598458)
 
-> **Status**: Active Development — v4.2.0
+> **Status**: Active Development — v4.3.0
 
 Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash), **Function Calling** untuk cuaca & web search, **Micro-RAG** memori jangka panjang, dan **Batch Analysis** otomatis.
 
@@ -23,6 +23,7 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **⚡ Gemini Function Calling**: Cuaca, web search, dan YouTube transcript diakses via semantic tool calling — Gemini memutuskan sendiri kapan butuh data eksternal.
 - **🌤️ Cuaca BMKG**: Data real-time dengan database offline 91.162 lokasi Indonesia. Download otomatis via `aiosqlite`.
 - **🔍 Web Search 3-Tier**: Tavily (primary) → DuckDuckGo (fallback) → Browserless SearXNG (tertiary). Cache per query, rate limiter per-user.
+- **👋 Auto-Welcome**: Sambutan member baru otomatis dengan teks plain (tanpa embed), template singkat yang merujuk ke #perkenalan dan #pedoman.
 - **🌐 Web Scraper**: Scrap konten web via Browserless `/content` + `/scrape` fallback. SSRF protection, cache per URL.
 - **🎬 YouTube Transcript**: Ekstrak subtitle via yt-dlp tanpa download video. Cache per video ID, keyword detection.
 - **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
@@ -150,9 +151,9 @@ python main.py
 |---------|-----------|
 | `/module status` | Status semua modul |
 | `/module toggle` | Aktifkan/nonaktifkan modul (Calculator, Weather, Greeting, Wellness, dll) |
-| `/greeting status` | Status welcome/goodbye |
-| `/greeting toggle` | Aktifkan/nonaktifkan greeting |
-| `/greeting setchannel` | Set channel greeting |
+| `/greeting status` | Status welcome otomatis |
+| `/greeting toggle` | Aktifkan/nonaktifkan welcome |
+| `/greeting setchannel` | Set channel untuk welcome |
 | `/bedtime on/off/status` | Pengingat waktu tidur |
 | `/online_counter on/off/status` | Penghitung user voice |
 
@@ -194,7 +195,7 @@ mirai-helix/
 ├── tools/                    # Tool modules
 │   ├── micro_rag.py         # Profiling user jangka panjang
 │   ├── context_compactor.py # Kompaksi riwayat percakapan via Groq
-│   ├── greeting.py          # Welcome/goodbye system
+│   ├── auto_greeting.py     # Auto-welcome (plain text, tanpa goodbye)
 │   ├── qwen_batch.py        # Batch conversation analysis
 │   ├── search_session.py    # Multi-turn search tracking
 │   └── file_reading.py      # Attachment text extraction
