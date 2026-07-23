@@ -87,8 +87,9 @@ TOOL_DECLARATIONS = {
                     "description": (
                         "Academic search query in Indonesian or English. "
                         "Use keywords from the user's question. "
+                        "Pastikan pakai bahasa Indonesia jika user pakai bahasa Indonesia. "
                         "Example: 'efek vitamin D pada imunitas' or "
-                        "'cognitive behavioral therapy insomnia'."
+                        "'terapi kognitif perilaku untuk insomnia'."
                     ),
                 }
             },
