@@ -56,6 +56,10 @@ class CommandGroup:
         from commands.search_command import SearchCommands
         SearchCommands(self.bot).register(self.tree)
 
+        # ── Plugin management ──────────────────────────────────────────────
+        from commands.plugin_command import PluginCommands
+        PluginCommands(self.bot).register(self.tree)
+
     async def sync_commands(self, guild_id: Optional[int] = None):
         """Sinkronisasi commands ke Discord."""
         if guild_id:

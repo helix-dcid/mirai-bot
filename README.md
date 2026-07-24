@@ -6,7 +6,7 @@
 [![homepage](https://img.shields.io/badge/homepage-helix--dcid.pages.dev-FF7139?style=for-the-badge&logo=cloudflare&logoColor=white)](https://helix-dcid.pages.dev)
 [![Disboard](https://img.shields.io/badge/Disboard-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://disboard.org/server/1388310480803598458)
 
-> **Status**: Active Development — v4.3.0
+> **Status**: Active Development — v4.4.0
 
 Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun tetap keibuan. Dibangun menggunakan `discord.py` dengan integrasi **Multi-Provider AI** (Gemini, Groq, DeepSeek V4 Pro/Flash), **Function Calling** untuk cuaca & web search, **Micro-RAG** memori jangka panjang, dan **Batch Analysis** otomatis.
 
@@ -27,10 +27,11 @@ Discord bot pintar dengan kepribadian "Mirai" yang bijaksana, kritis, namun teta
 - **👋 Auto-Welcome**: Sambutan member baru otomatis dengan teks plain (tanpa embed), template singkat yang merujuk ke #perkenalan dan #pedoman.
 - **🌐 Web Scraper**: Scrap konten web via Browserless `/content` + `/scrape` fallback. SSRF protection, cache per URL.
 - **🎬 YouTube Transcript**: Ekstrak subtitle via yt-dlp tanpa download video. Cache per video ID, keyword detection.
-- **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT.
+- **📂 File Attachment Processing**: Baca teks dari PDF, DOCX, XLSX, PPTX, dan TXT (plugin `file_reader`).
 - **🧠 Micro-RAG Memory**: Profiling user jangka panjang via Groq — kepribadian, minat, mood, EXP system.
 - **📄 Batch Analysis Otomatis**: DeepSeek V4 menganalisis percakapan harian, dikirim sebagai file TXT/PDF.
-- **⚡ Module Manager Dinamis**: 9 module toggleable tanpa restart (calculator, weather, greeting, deepseek, wellness, web_scraper, youtube_transcript, search, journal).
+- **🔌 Plugin System**: Semua fitur adalah plugin independen di `plugins/`. Masing-masing punya lifecycle hooks, config persistent, dan bisa di-load/unload/reload runtime.
+- **⚡ Dual Toggle System**: Module Manager (toggle per modul) + Plugin Manager (load/unload plugin penuh). Circuit breaker otomatis nonaktifkan plugin yang crash >3x dalam 5 menit.
 - **⏰ Scheduler Cerdas**: Rich presence rotation, auto-batch, resource monitor (auto-pause modul saat CPU >70%).
 - **🧠 Context Compaction**: Riwayat percakapan otomatis diringkas via Groq saat mencapai batas, memori terus berlanjut tanpa kehilangan konteks.
 
@@ -119,6 +120,7 @@ python main.py
 | `/clear` | Hapus riwayat percakapan (admin) |
 | `/cuaca` | Cek prakiraan cuaca BMKG |
 | `/report` | Upload laporan batch terbaru |
+| `/readfile` | Baca teks dari file attachment manual |
 
 ### Web Search
 | Command | Deskripsi |
@@ -147,16 +149,16 @@ python main.py
 
 > ⚠️ `/qwen` grup commands adalah alias backward-compat untuk `/deepseek`.
 
-### Pengaturan Server
+### Plugin & Module
 | Command | Deskripsi |
 |---------|-----------|
-| `/module status` | Status semua modul |
-| `/module toggle` | Aktifkan/nonaktifkan modul (Calculator, Weather, Greeting, Wellness, Journal, dll) |
-| `/greeting status` | Status welcome otomatis |
-| `/greeting toggle` | Aktifkan/nonaktifkan welcome |
-| `/greeting setchannel` | Set channel untuk welcome |
-| `/bedtime on/off/status` | Pengingat waktu tidur |
-| `/online_counter on/off/status` | Penghitung user voice |
+| `/plugin list` | Daftar semua plugin dengan status |
+| `/plugin load <name>` | Load plugin |
+| `/plugin unload <name>` | Unload plugin runtime |
+| `/plugin reload <name>` | Hot-reload plugin (importlib.reload) |
+| `/plugin info <name>` | Detail metadata & konfigurasi plugin |
+| `/module status` | Status toggle semua modul |
+| `/module toggle` | Aktifkan/nonaktifkan modul (file_reader, greeting, weather, dll) |
 
 ## 📄 Struktur Direktori
 
@@ -181,6 +183,7 @@ mirai-helix/
 │   ├── deepseek_command.py  # /deepseek (batch & model)
 │   ├── qwen_command.py      # /qwen (backward compat)
 │   ├── module_command.py    # /module
+│   ├── plugin_command.py    # /plugin (list, load, unload, reload, info)
 │   ├── greeting_command.py  # /greeting
 │   ├── search_command.py    # /search, /search-ai
 │   └── general.py           # /report
@@ -188,12 +191,25 @@ mirai-helix/
 │   ├── bot.py               # Discord client factory
 │   ├── router.py            # Main router (wires everything)
 │   ├── command.py           # Slash command loader
-│   ├── module_manager.py    # Manajemen modul dinamis
+│   ├── plugin_manager.py    # Plugin system: discover, load, circuit breaker
+│   ├── module_manager.py    # Dynamic module toggle (hot-switch per plugin)
 │   └── events/
 │       └── message_handler.py # Pipeline pemrosesan pesan
 ├── services/                 # Service layer
 │   ├── ai_service.py        # AI Service (Gemini + memory)
 │   └── scheduler_service.py # Background scheduler
+├── plugins/                  # Plugin system (auto-discovered)
+│   ├── base.py              # Base Plugin class (config, hooks, API)
+│   ├── greeting/            # Sambutan member baru
+│   ├── search/              # Web Search (Tavily/DDG)
+│   ├── deepseek_batch/      # DeepSeek Batch Analysis
+│   ├── weather/             # Cuaca BMKG
+│   ├── wellness/            # Wellness reminders
+│   ├── youtube/             # YouTube Transcript
+│   ├── journal/             # Journal Reference (CrossRef)
+│   └── file_reader/         # File Attachment Reader
+├── models/                   # Data models
+│   └── plugin_data.py       # Thread-safe JSON store per plugin
 ├── tools/                    # Tool modules
 │   ├── micro_rag.py         # Profiling user jangka panjang
 │   ├── context_compactor.py # Kompaksi riwayat percakapan via Groq
@@ -213,7 +229,8 @@ mirai-helix/
 ├── data/                     # Runtime data
 │   ├── wilayah.db           # Database BMKG offline
 │   ├── chat_log.json        # Chat log untuk Micro-RAG
-│   └── *.json               # Config runtime
+│   ├── module_config.json   # Module toggle state
+│   └── plugins/             # Per-plugin config & data
 ├── .env                     # Konfigurasi sensitif (JANGAN di-commit)
 ├── .env.example             # Template konfigurasi environment
 ├── requirements.txt         # Dependencies

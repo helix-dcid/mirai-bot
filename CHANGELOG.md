@@ -1,5 +1,34 @@
 # Changelog - Mirai Helix
 
+## [4.4.0] - 2026-07-24
+### ✨ Added
+- **Plugin System**: Fitur modular berbasis plugin. Semua fitur bot direfactor menjadi plugin independen di `plugins/`. Masing-masing punya lifecycle hooks (`on_load`, `on_ready`, `on_message`, `on_unload`, dll), config system, dan data path sendiri.
+- **`plugins/base.py`**: Base class `Plugin` dengan config (JSON persistent), `get_data_path()`, `is_enabled()`, hooks lengkap, dan `api` property untuk interop plugin-ke-plugin.
+- **`core/plugin_manager.py`**: `PluginManager` — discover otomatis (pindai `plugins/*/__init__.py`), dependency DAG resolution, load/unload/reload, circuit breaker (auto-disable plugin setelah 3 error dalam 5 menit via module toggle).
+- **`models/plugin_data.py`**: `PluginData` + `PluginDataManager` — thread-safe JSON data store per plugin.
+- **`core/module_manager.py` — Dynamic Registration**: Method `register_module()` / `unregister_module()` untuk registrasi otomatis saat plugin di-load/di-unload.
+- **`commands/plugin_command.py`**: `/plugin list`, `/plugin load <name>`, `/plugin unload <name>`, `/plugin reload <name>`, `/plugin info <name>` — manajemen plugin runtime.
+- **7 plugin bawaan**:
+  - `greeting` — Sambutan member baru
+  - `search` — Pencarian web (Tavily/DDG)
+  - `deepseek_batch` — Batch analysis DeepSeek
+  - `weather` — Cuaca BMKG
+  - `wellness` — Pengingat kesehatan
+  - `youtube` — YouTube Transcript
+  - `journal` — Referensi jurnal CrossRef
+- **`plugins/file_reader/`**: Plugin File Reader — auto-read attachment (PDF/DOCX/XLSX/PPTX/TXT) sebagai context AI. Bisa toggle via `/module file_reader`. Slash command `/readfile` untuk baca file manual.
+- **Hot-Reload**: `importlib.reload()` pada `reload_plugin()` — update kode plugin tanpa restart bot.
+
+### 🔄 Changed
+- **`core/router.py`**: Terintegrasi `PluginManager` — event `on_message`, `on_message_edit`, `on_member_join`, `on_member_remove` di-dispatch ke plugin sebelum handler utama.
+- **`core/events/message_handler.py`**: `_get_attachment_context()` sekarang hanya ngecek `module_manager.is_enabled("file_reader")`, tanpa dependensi `qwen_batch.is_channel_enabled()`.
+- **`tools/auto_greeting.py`**: `@bot.event` decorator dilepas, expose `on_member_join()` async method. Dipanggil langsung oleh Router, bukan event listener ganda.
+- **`core/module_manager.py`**: `is_enabled()` return `False` untuk modul yang tidak terdaftar di `_modules`. `register_module()` return `bool`. Method `reset()` untuk test isolation.
+
+### 🧹 Cleanup
+- **Hapus hardcoded feature list**: Fitur yang sudah jadi plugin tidak lagi hardcode di module list (kecuali `calculator` dan `web_scraper`).
+- **`tests/` dihapus**: Test suite dan artifacts dibersihkan.
+
 ## [4.3.0] - 2026-07-23
 ### ✨ Added
 - **📚 Journal Reference (CrossRef)**: Fitur pencarian jurnal ilmiah dan literatur akademik via CrossRef API (gratis, tanpa API key). Terintegrasi sebagai Gemini function calling — Gemini otomatis mencari referensi jurnal saat user bertanya soal kesehatan, gejala medis, penelitian, atau topik keilmuan. Hasil mencakup judul, penulis, jurnal, tahun, DOI, dan abstrak. Module `journal` (default aktif, toggleable). (`ai/jurnal.py`, `ai/tool_definitions.py`, `ai/tool_executor.py`, `ai/gemini.py`, `ai/prompts/mirai_system_prompt.txt`)

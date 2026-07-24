@@ -152,16 +152,15 @@ class MessageHandler:
 
     async def _get_attachment_context(self, attachments: list, channel_id: int) -> str:
         """
-        Ambil context dari attachment hanya jika channel mengaktifkan fitur ini.
+        Ambil context dari attachment hanya jika plugin file_reader aktif.
         """
         if not attachments:
             return ""
-        
-        # Cek jika channel memiliki fitur attachment processing
-        if hasattr(qwen_batch, 'is_channel_enabled') and qwen_batch.is_channel_enabled(channel_id):
-            return await build_attachment_context(attachments)
-        
-        return ""
+
+        if not module_manager.is_enabled("file_reader"):
+            return ""
+
+        return await build_attachment_context(attachments)
 
     def _build_gemini_context(
         self,

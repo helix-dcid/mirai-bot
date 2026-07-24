@@ -249,6 +249,85 @@ pm2 startup
 - [ ] Jangan share token Discord atau API keys
 - [ ] Gunakan `.gitignore` untuk exclude sensitive files
 
+## Plugin System (v2)
+
+Mirai Helix now uses a fully modular plugin system. Each feature lives in its own plugin folder under `plugins/`.
+
+### Architecture
+
+```
+plugins/
+├── base.py               # Base Plugin class (all hooks, config, API)
+├── greeting/             # Auto Greeting plugin
+├── search/               # Web Search plugin
+├── deepseek_batch/       # DeepSeek Batch plugin
+├── weather/              # Weather plugin
+├── wellness/             # Wellness Reminder plugin
+├── youtube/              # YouTube Transcript plugin
+└── journal/              # Journal Reference plugin
+
+core/
+├── plugin_manager.py     # PluginManager (discover, load, circuit breaker)
+├── module_manager.py     # Dynamic module toggle (hot-switch each plugin)
+└── router.py             # Routes events to PluginManager
+
+commands/
+└── plugin_command.py     # /plugin list, load, unload, reload, info
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/plugin list` | List all plugins with status |
+| `/plugin load <name>` | Load a discovered plugin |
+| `/plugin unload <name>` | Unload a running plugin |
+| `/plugin reload <name>` | Hot-reload a plugin (importlib.reload) |
+| `/plugin info <name>` | Show plugin metadata & config |
+
+### Creating a New Plugin
+
+Create a new folder under `plugins/` with `__init__.py`:
+
+```python
+from plugins.base import Plugin
+
+class MyPlugin(Plugin):
+    id = "my_plugin"
+    name = "My Plugin"
+    version = "1.0.0"
+    author = "you"
+    description = "Does something cool"
+    module_name = "my_plugin"       # Enables /module toggle
+    dependencies = []               # Plugin IDs this depends on
+    config_defaults = {"key": "value"}
+
+    async def on_load(self):
+        pass   # Setup on bot start
+
+    async def on_message(self, message) -> bool:
+        return False   # Return True to consume the message
+
+    def register_commands(self, tree):
+        pass   # Register slash commands
+```
+
+Plugins are auto-discovered on next bot restart — no code changes needed.
+
+### Module Toggle
+
+Each plugin with `module_name` set can be toggled on/off at runtime via `/module` commands. The circuit breaker auto-disables a plugin after 3 crashes in 5 minutes.
+
+### Plugin-to-Plugin API
+
+Plugins expose a public API via the `api` property. Other plugins access it through `PluginManager.get_plugin_api()`:
+
+```python
+@property
+def api(self):
+    return {"get_data": self._get_data}
+```
+
 ## Support
 
 Untuk masalah atau saran, hubungi admin server Helix.

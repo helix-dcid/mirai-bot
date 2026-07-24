@@ -14,17 +14,12 @@ CONFIG_PATH = Path("data/greeting_config.json")
 auto_greeting = None
 
 class AutoGreeting:
-    """
-    Kelas untuk menangani pesan sambutan dan perpisahan otomatis.
-    """
     def __init__(self, bot: discord.Client, gemini_client):
         self.bot = bot
         self.gemini = gemini_client
         self._ensure_config_exists()
-        self.setup_events()
 
     def _ensure_config_exists(self):
-        """Memastikan file konfigurasi ada."""
         if not CONFIG_PATH.parent.exists():
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         if not CONFIG_PATH.exists():
@@ -32,7 +27,6 @@ class AutoGreeting:
                 json.dump({"enabled": True, "guilds": {}}, f, indent=4)
 
     def _load_config(self):
-        """Membaca konfigurasi dari file JSON."""
         try:
             with open(CONFIG_PATH, 'r') as f:
                 return json.load(f)
@@ -41,7 +35,6 @@ class AutoGreeting:
             return {"enabled": True, "guilds": {}}
 
     def _save_config(self, config):
-        """Menyimpan konfigurasi ke file JSON."""
         try:
             with open(CONFIG_PATH, 'w') as f:
                 json.dump(config, f, indent=4)
@@ -49,11 +42,8 @@ class AutoGreeting:
             logger.error(f"[GREETING] Error saving config: {e}")
 
     def is_enabled(self, guild_id: int) -> bool:
-        """Cek apakah fitur aktif untuk guild tertentu."""
-        # Cek status modul global dulu
         if not module_manager.is_enabled("greeting"):
             return False
-            
         config = self._load_config()
         if not config.get("enabled", True):
             return False
@@ -61,7 +51,6 @@ class AutoGreeting:
         return guild_config.get("enabled", True)
 
     def set_enabled(self, guild_id: int, status: bool):
-        """Mengatur status aktif/nonaktif untuk guild tertentu."""
         config = self._load_config()
         if str(guild_id) not in config["guilds"]:
             config["guilds"][str(guild_id)] = {}
@@ -69,7 +58,6 @@ class AutoGreeting:
         self._save_config(config)
 
     def set_channel(self, guild_id: int, channel_id: int):
-        """Mengatur ID channel khusus untuk greeting di guild tertentu."""
         config = self._load_config()
         if str(guild_id) not in config["guilds"]:
             config["guilds"][str(guild_id)] = {}
@@ -77,7 +65,6 @@ class AutoGreeting:
         self._save_config(config)
 
     def _get_welcome_message(self, member: discord.Member) -> str:
-        """Pesan sambutan sesuai template yang diminta."""
         name = member.display_name
         perkenalan = "<#1391643015969509476>"
         pedoman = "<#1389578192246935633>"
@@ -88,25 +75,19 @@ class AutoGreeting:
             f"Makasih banyak!"
         )
 
-    def setup_events(self):
-        @self.bot.event
-        async def on_member_join(member: discord.Member):
-            """Event saat member baru bergabung."""
-            if member.bot or not self.is_enabled(member.guild.id):
-                return
-
-            channel = self._get_greeting_channel(member.guild)
-            if not channel:
-                return
-
-            await asyncio.sleep(2)
-            try:
-                welcome_msg = self._get_welcome_message(member)
-
-                await channel.send(welcome_msg)
-                logger.info(f"[WELCOME] Sent welcome message for {member.display_name} in {channel.name}")
-            except Exception as e:
-                logger.error(f"[WELCOME] Critical Error: {e}")
+    async def on_member_join(self, member: discord.Member):
+        if member.bot or not self.is_enabled(member.guild.id):
+            return
+        channel = self._get_greeting_channel(member.guild)
+        if not channel:
+            return
+        await asyncio.sleep(2)
+        try:
+            welcome_msg = self._get_welcome_message(member)
+            await channel.send(welcome_msg)
+            logger.info("[WELCOME] Sent welcome message for %s in %s", member.display_name, channel.name)
+        except Exception as e:
+            logger.error("[WELCOME] Critical Error: %s", e)
 
     def _get_greeting_channel(self, guild: discord.Guild) -> discord.TextChannel:
         """Mencari channel terbaik untuk mengirim pesan sambutan."""
