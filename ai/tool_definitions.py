@@ -78,7 +78,7 @@ TOOL_DECLARATIONS = {
             "citing a peer-reviewed source would add credibility to your answer. "
             "Returns title, authors, journal name, year, DOI, and abstract. "
             "You MUST cite the journal title, author names, and year when presenting "
-            "the information. Include the DOI link at the end. "
+            "the information. Include the full DOI URL (https://doi.org/...) at the end. "
             "Example format: 'Penelitian berjudul [title] oleh [authors] di jurnal "
             "[journal] tahun [year] menemukan bahwa...'"
         ),
